@@ -191,7 +191,7 @@ class ChatSession:
                  temperature: float = 1.0,
                  max_completion_tokens: int = MAX_COMPLETION_TOKENS,
                  max_context_tokens: int = MAX_CONTEXT_TOKENS):
-        """Session de chat avec un modèle GPT-4o-mini
+        """Session de chat avec un modèle GPT4o-mini
 
         :param cog: Cog parent
         :param channel: Salon de discussion où se déroule la discussion
@@ -568,7 +568,7 @@ class GPT(commands.Cog):
         
         embed = discord.Embed(title="Informations sur l'assitant", color=discord.Color(0x000001))
         embed.set_thumbnail(url=interaction.channel.guild.me.display_avatar.url)
-        embed.set_footer(text="Implémentation de GPT-4o-mini et Whisper-1 (par OpenAI)", icon_url="https://static-00.iconduck.com/assets.00/openai-icon-2021x2048-4rpe5x7n.png")
+        embed.set_footer(text="Implémentation de GPT4o-mini et Whisper-1 (par OpenAI)", icon_url="https://static-00.iconduck.com/assets.00/openai-icon-2021x2048-4rpe5x7n.png")
         session = await self._get_session(interaction.channel)
         if not session:
             return await interaction.response.send_message("**Erreur interne** × Impossible de récupérer la session de chat.", ephemeral=True)
