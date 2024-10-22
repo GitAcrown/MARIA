@@ -279,6 +279,10 @@ class ChatSession:
                 temperature=self.temperature
             )
         except Exception as e:
+            if '400' in str(e): 
+                # Erreur de requête, on supprime l'historique
+                self.clear_all_messages()
+                return await self.complete()
             logger.error(f'Error while generating completion: {e}')
             raise e
         if not completion.choices:
