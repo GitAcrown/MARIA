@@ -232,6 +232,8 @@ class ChatSession:
             if not msg.author == self.guild.me:
                 elements = await self.__cog._extract_content_from_message(msg)
                 self.messages.append(UserChatMessage(elements, msg.author))
+            else:
+                self.messages.append(AssistantChatMessage(msg.content))
     
     def add_message(self, message: BaseChatMessage):
         self.messages.append(message)
