@@ -280,6 +280,7 @@ class ChatSession:
             )
         except Exception as e:
             if '400' in str(e): 
+                logger.error(f'Error while generating completion: {e}\n-- Deleting messages with images...')
                 # Erreur de requête (souvent les images) : on supprime l'historique des messages contenant des images
                 self.clear_messages(lambda message: any([element.type == 'image_url' for element in message.content]))
                 return await self.complete()
