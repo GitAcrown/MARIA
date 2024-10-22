@@ -2,7 +2,7 @@ import io
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable, Literal
 from pathlib import Path
 from weakref import ref
@@ -258,6 +258,13 @@ class ChatSession:
             context.append(message)
         if include_system_prompt:
             context.append(self.system_prompt)
+            
+        # Nettoyage des messages trop anciens (1h avant le message le plus ancien du contexte)
+        if context:
+            oldest_message = context[-1]
+            cutoff = oldest_message.timestamp - timedelta(hours=1)
+            self.clear_messages(lambda message: message.timestamp < cutoff)
+    
         return context[::-1] # On inverse l'ordre pour remettre les messages dans l'ordre chronologique
     
     # Interaction avec l'IA
