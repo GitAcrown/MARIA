@@ -752,6 +752,8 @@ class GPT(commands.Cog):
                 if not completion:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
+                if not completion.content or not completion.content[0].raw_content:
+                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
                 
