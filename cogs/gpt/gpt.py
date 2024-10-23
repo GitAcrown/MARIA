@@ -535,12 +535,12 @@ class GPT(commands.Cog):
         return user.id if user else None
     
     def get_user_notes(self, user: discord.User | discord.Member | int) -> str | None:
-        user_id = user.id if isinstance(user, discord.User) else user
+        user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         notes = self.data.get('global').fetchone('SELECT notes FROM memory WHERE user_id = ?', user_id)
         return notes['notes'] if notes else None
     
     def set_user_notes(self, user: discord.User | discord.Member | int, notes: str):
-        user_id = user.id if isinstance(user, discord.User) else user
+        user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, notes) VALUES (?, ?)', user_id, notes)
     
     # Audio --------------------------------------------------------------------
