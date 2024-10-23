@@ -4,18 +4,16 @@ import logging
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Callable, Literal
 from pathlib import Path
-from weakref import ref
-from moviepy.editor import VideoFileClip
+from typing import Callable, Literal
 
 import discord
 import pytz
-from regex import D
 import tiktoken
 import unidecode
-from discord import Interaction, InteractionMessage, User, app_commands
+from discord import Interaction, app_commands
 from discord.ext import commands
+from moviepy.editor import VideoFileClip
 from openai import AsyncOpenAI
 
 from common import dataio
@@ -27,7 +25,7 @@ FULL_SYSTEM_PROMPT = lambda data: f"""# FONCTIONNEMENT INTERNE
 La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
 Tu es capable de voir les images que les utilisateurs envoient.
-Tu disposes de deux fonctions te permettant de garder des notes sur les utilisateurs.
+Tu disposes de deux fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
 Tu suis scrupuleusement les instructions ci-après.
 
 # INFORMATIONS
