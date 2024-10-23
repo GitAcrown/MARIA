@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Literal
 
+from anyio import key
 import discord
 import pytz
 import tiktoken
@@ -140,6 +141,25 @@ class SystemPromptModal(discord.ui.Modal, title="Modifier les instructions syst�
         
     async def on_error(self, interaction: Interaction, error: Exception) -> None:
         return await interaction.response.send_message(f"**Erreur** × {error}", ephemeral=True)
+    
+class ConfirmView(discord.ui.View):
+    """Permet de confirmer une action."""
+    def __init__(self, author: discord.Member | discord.User):
+        super().__init__()
+        self.value = False
+        self.author = author
+    
+    @discord.ui.button(label="Confirmer", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        self.value = True
+        self.stop()
+    
+    @discord.ui.button(label="Annuler", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        self.value = False
+        self.stop()
 
 class MessageContentElement:
     def __init__(self, type: Literal['text', 'image_url'], raw_content: str):
@@ -597,6 +617,10 @@ class GPT(commands.Cog):
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, key, value) VALUES (?, ?, ?)', user_id, key, value)
         
+    def delete_user_info(self, user: discord.User | discord.Member | int, key: str):
+        user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
+        self.data.get('global').execute('DELETE FROM memory WHERE user_id = ? AND key = ?', user_id, key)
+        
     def clear_user_info(self, user: discord.User | discord.Member | int):
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
@@ -840,11 +864,42 @@ class GPT(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
     @memory_group.command(name='delete')
-    async def cmd_delete_memory(self, interaction: Interaction):
-        """Supprimer les notes de l'assistant associées à vous."""
+    @app_commands.rename(key='clé')
+    async def cmd_delete_memory(self, interaction: Interaction, key: str | None = None):
+        """Supprimer les notes de l'assistant associées à vous.
+        
+        :param key: Clé de la note à supprimer"""
         user = interaction.user
-        self.clear_user_info(user)
-        return await interaction.response.send_message(f"**Notes supprimées** · Les notes de l'assistant sur vous ont été effacées.", ephemeral=True)
+        if not key:
+            # On demande confirmation
+            view = ConfirmView(user)
+            await interaction.response.send_message(f"**Confirmation** · Êtes-vous sûr de vouloir supprimer toutes les notes de l'assistant associées à vous ?", ephemeral=True, view=view)
+            await view.wait()
+            if not view.value:
+                return await interaction.edit_original_response(content="**Action annulée** · Les notes de l'assistant n'ont pas été supprimées.", view=None)
+            self.clear_user_info(user)
+            return await interaction.edit_original_response(content="**Notes supprimées** · Toutes les notes de l'assistant associées à vous ont été supprimées.", view=None)
+        
+        notes = self.get_user_info(user, key)
+        if not notes:
+            return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous pour la clé `{key}`.", ephemeral=True)
+        
+        # On demande confirmation
+        view = ConfirmView(user)
+        await interaction.response.send_message(f"**Confirmation** · Êtes-vous sûr de vouloir supprimer la note de l'assistant associée à vous pour la clé `{key}` ?", ephemeral=True, view=view)
+        await view.wait()
+        if not view.value:
+            return await interaction.edit_original_response(content="**Action annulée** · La note de l'assistant n'a pas été supprimée.", view=None)
+        
+        self.delete_user_info(user, key)
+        await interaction.edit_original_response(content=f"**Note supprimée** · La note de l'assistant associée à vous pour la clé `{key}` a été supprimée.", view=None)
+
+    @cmd_delete_memory.autocomplete('key')
+    async def autocomplete_key_callback(self, interaction: Interaction, current: str):
+        user = interaction.user 
+        keys = self.get_all_user_info(user).keys()
+        fuzz = fuzzy.finder(current, keys)
+        return [app_commands.Choice(name=key, value=key) for key in fuzz]
 
 async def setup(bot):
     await bot.add_cog(GPT(bot))
