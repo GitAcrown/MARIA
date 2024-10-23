@@ -898,7 +898,7 @@ class GPT(commands.Cog):
         user = interaction.user 
         keys = self.get_all_user_info(user).keys()
         fuzz = fuzzy.finder(current, keys)
-        return [app_commands.Choice(name=key, value=key) for key in fuzz]
+        return [app_commands.Choice(name=key, value=key) for key in fuzz][:10]
 
 async def setup(bot):
     await bot.add_cog(GPT(bot))
