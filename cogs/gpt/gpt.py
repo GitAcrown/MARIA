@@ -778,7 +778,7 @@ class GPT(commands.Cog):
         if not notes:
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
         
-        embed = discord.Embed(title=f"Notes de l'assistant", description=notes, color=discord.Color(0x000001))
+        embed = discord.Embed(title=f"Notes de l'assistant", description=pretty.codeblock(notes), color=discord.Color(0x000001))
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
     @memory_group.command(name='delete')
