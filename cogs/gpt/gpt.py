@@ -25,7 +25,7 @@ FULL_SYSTEM_PROMPT = lambda data: f"""# FONCTIONNEMENT INTERNE
 La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
 Tu es capable de voir les images que les utilisateurs envoient.
-Tu disposes de deux fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
+Tu disposes de trois fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
 Tu suis scrupuleusement les instructions ci-après.
 
 # INFORMATIONS
