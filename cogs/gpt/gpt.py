@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import os
 import re
@@ -13,7 +14,7 @@ import pytz
 from regex import D
 import tiktoken
 import unidecode
-from discord import Interaction, User, app_commands
+from discord import Interaction, InteractionMessage, User, app_commands
 from discord.ext import commands
 from openai import AsyncOpenAI
 
@@ -23,14 +24,14 @@ from common.utils import fuzzy, pretty
 logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
 FULL_SYSTEM_PROMPT = lambda data: f"""# FONCTIONNEMENT INTERNE
-La discussion se déroule sur un salon de discussion textuel Discord avec plusieurs utilisateurs simultanés, tu as accès à l'historique de ces messages.
-Les noms des utilisateurs précèdent leurs messages. Tu ne met pas ton nom devant tes messages.
-Le texte entre crochets [ ] indique des informations supplémentaires sur le message.
+La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
+Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
 Tu es capable de voir les images que les utilisateurs envoient.
+Tu disposes de deux fonctions te permettant de garder des notes sur les utilisateurs.
 Tu suis scrupuleusement les instructions ci-après.
 
 # INFORMATIONS
-SALON ACTUEL : {data['channel_name']}
+SALON : {data['channel_name']}
 SERVEUR : {data['guild_name']}
 TON NOM : {data['bot_name']}
 DATE/HEURE : {data['current_date']}
@@ -40,6 +41,52 @@ DATE/HEURE : {data['current_date']}
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
 MAX_COMPLETION_TOKENS = 300
 MAX_CONTEXT_TOKENS = 4096
+ENABLE_TOOL_USE : bool = True
+
+GPT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user_notes",
+            "description": "Renvoie les notes associées à un utilisateur.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["user"],
+                "properties": {
+                    "user": {
+                        "type": "string",
+                        "description": "Le nom de l'utilisateur dont on veut récupérer les notes.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_user_notes",
+            "description": "Modifie les notes associées à un utilisateur.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["notes", "user"],
+                "properties": {
+                    "notes": {
+                        "type": "string",
+                        "description": "Les notes à associer à l'utilisateur.",
+                    },
+                    "user": {
+                        "type": "string",
+                        "description": "Le nom de l'utilisateur dont on veut modifier les notes.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+]
 
 def clean_name(name: str) -> str:
     name = ''.join([c for c in unidecode.unidecode(name) if c.isalnum() or c.isspace()]).rstrip()
@@ -68,7 +115,7 @@ class SystemPromptModal(discord.ui.Modal, title="Modifier les instructions syst�
         
     async def on_error(self, interaction: Interaction, error: Exception) -> None:
         return await interaction.response.send_message(f"**Erreur** × {error}", ephemeral=True)
-        
+
 class MessageContentElement:
     def __init__(self, type: Literal['text', 'image_url'], raw_content: str):
         self.type = type
@@ -98,21 +145,26 @@ class MessageContentElement:
         elif self.type == 'image_url':
             return 85
         return 0
-    
+
 class BaseChatMessage:
     def __init__(self, 
-                 role: Literal['user', 'assistant', 'system'], 
+                 role: Literal['user', 'assistant', 'system', 'tool'], 
                  content: str | list[MessageContentElement],
                  *,
                  name: str | discord.User | discord.Member | None = None,
                  timestamp: datetime | None = None,
-                 token_count: int | None = None):
+                 token_count: int | None = None,
+                 tool_call_id: str | None = None,
+                 tool_calls: list[dict] | None = None):
         self.role = role
         
         self.__content = content
         self.__name = name
         self.__timestamp = timestamp or datetime.now(pytz.utc)
         self.__token_count = token_count
+        
+        self.tool_call_id = tool_call_id
+        self.tool_calls = tool_calls or []
         
     def __repr__(self):
         return f'<BaseChatMessage role={self.role} content={self.content} name={self.name}>'
@@ -161,27 +213,55 @@ class BaseChatMessage:
             'role': self.role,
             'content': [element.to_dict() for element in self.content]
         }
-    
+
 class SystemChatMessage(BaseChatMessage):
     """Représente un message du système, qui n'est pas généré par un utilisateur ou un assistant"""
     def __init__(self, 
                  content: str):
-        super().__init__(role='system', content=content, name=None, timestamp=None, token_count=None)
-        
+        super().__init__(role='system', content=content, name=None, timestamp=None, token_count=None, tool_call_id=None)
+
 class UserChatMessage(BaseChatMessage):
     """Repésente un message d'un utilisateur, avec un nom associé"""
     def __init__(self, 
                  content: str | list[MessageContentElement],
                  name: str | discord.User | discord.Member):
-        super().__init__(role='user', content=content, name=name, timestamp=None, token_count=None)
-        
+        super().__init__(role='user', content=content, name=name, timestamp=None, token_count=None, tool_call_id=None)
+
 class AssistantChatMessage(BaseChatMessage):
     """Représente une réponse générée par l'IA"""
     def __init__(self, 
                  content: str | list[MessageContentElement],
                  token_count: int | None = None): # Le nb de tokens est renvoyé par l'API donc on peut le passer en paramètre
-        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count)
+        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None)
+
+class AssistantToolCallChatMessage(BaseChatMessage):
+    """Représente un message d'assistant qui appelle un outil"""
+    def __init__(self,
+                 tool_calls: list[dict]):
+        super().__init__(role='assistant', content='', name=None, timestamp=None, token_count=None, tool_call_id=None, tool_calls=tool_calls)
+        
+    def to_dict(self) -> dict:
+        return {
+            'role': self.role,
+            'tool_calls': self.tool_calls
+        }
     
+class ToolChatMessage(BaseChatMessage):
+    """Repésente un message d'outil, qui est une réponse à un appel d'outil"""
+    def __init__(self,
+                 content: str,
+                 name: str,
+                 tool_call_id: str):
+        super().__init__(role='tool', content=content, name=name, timestamp=None, token_count=None, tool_call_id=tool_call_id)
+        
+    def to_dict(self) -> dict:
+        return {
+            'role': self.role,
+            'content': str(self.content),
+            'name': self.name,
+            'tool_call_id': self.tool_call_id
+        }
+
 class ChatSession:
     def __init__(self,
                  cog: 'GPT',
@@ -252,6 +332,10 @@ class ChatSession:
         context = []
         token_count = self.system_prompt.token_count if include_system_prompt else 0
         for message in reversed(self.messages): # On inverse l'ordre pour avoir les messages les plus récents en premier
+            # Les messages d'outils sont toujours inclus
+            if message.role == 'tool' or message.tool_calls:
+                context.append(message)
+                continue
             token_count += message.token_count
             if token_count > self.max_context_tokens:
                 break
@@ -269,17 +353,19 @@ class ChatSession:
     
     # Interaction avec l'IA
     
-    async def complete(self) -> AssistantChatMessage | None:
+    async def complete(self) -> AssistantChatMessage | ToolChatMessage | None:
         messages = [message.to_dict() for message in self.get_context()]
         try:
             completion = await self.__cog.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=messages,
                 max_tokens=self.max_completion_tokens,
-                temperature=self.temperature
+                temperature=self.temperature,
+                tools=GPT_TOOLS if ENABLE_TOOL_USE else [], # type: ignore
+                tool_choice='auto'
             )
         except Exception as e:
-            if '400' in str(e): 
+            if 'invalid_image_url' in str(e): 
                 logger.error(f'Error while generating completion: {e}\n-- Deleting messages with images...')
                 # Erreur de requête (souvent les images) : on supprime l'historique des messages contenant des images
                 self.clear_messages(lambda message: any([element.type == 'image_url' for element in message.content]))
@@ -288,16 +374,59 @@ class ChatSession:
             raise e
         if not completion.choices:
             return None
-        content = completion.choices[0].message.content if completion.choices[0].message.content else ''
+        
+        message = completion.choices[0].message
+        content = message.content if message.content else ''
         usage = completion.usage.total_tokens if completion.usage else 0
+        
+        if ENABLE_TOOL_USE:
+            tool_msg = None
+            if message.tool_calls:
+                tool_call = message.tool_calls[0]
+                call_data = {
+                    'id': tool_call.id,
+                    'type': 'function',
+                    'function': {
+                        'arguments': tool_call.function.arguments,
+                        'name': tool_call.function.name
+                    } 
+                }
+                calling_msg = AssistantToolCallChatMessage([call_data])
+                self.add_message(calling_msg) 
+                
+                if tool_call.function.name == 'get_user_notes':
+                    user_name = json.loads(tool_call.function.arguments)['user']
+                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
+                    if user_id:
+                        notes = self.__cog.get_user_notes(user_id)
+                        if not notes:
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': 'Aucune note'}), tool_call.function.name, tool_call.id)
+                        else:
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': notes}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'set_user_notes':
+                    arguments = json.loads(tool_call.function.arguments)
+                    user_name = arguments['user']
+                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
+                    if not user_id:
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': 'Utilisateur introuvable'}), tool_call.function.name, tool_call.id)
+                    else:
+                        self.__cog.set_user_notes(user_id, arguments['notes'])
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': arguments['notes']}), tool_call.function.name, tool_call.id)
+                
+                # Si y'a un message d'outil, on ajoute la réopnse de l'assistant
+                if tool_msg:
+                    self.add_message(tool_msg)
+                    return await self.complete()
+        
         return AssistantChatMessage(content, token_count=usage)
-    
+
 
 class GPT(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.data = dataio.get_instance(self)
         
+        # Configuration des salons
         chatconfig = dataio.TableBuilder(
             '''CREATE TABLE IF NOT EXISTS chatconfig (
                 channel_id INTEGER PRIMARY KEY,
@@ -306,6 +435,15 @@ class GPT(commands.Cog):
                 )'''
         )
         self.data.link(discord.Guild, chatconfig)
+        
+        # Table pour stocker les notes de l'assistant sur les utilisateurs
+        memory = dataio.TableBuilder(
+            '''CREATE TABLE IF NOT EXISTS memory (
+                user_id INTEGER PRIMARY KEY,
+                notes TEXT
+                )'''
+        )
+        self.data.link('global', memory)
         
         self.client = AsyncOpenAI(
                 api_key=self.bot.config['OPENAI_API_KEY'], # type: ignore
@@ -341,8 +479,8 @@ class GPT(commands.Cog):
                               system_prompt=config['system_prompt'],
                               temperature=config['temperature'])
         self._sessions[channel.id] = session
-        if isinstance(channel, (discord.TextChannel, discord.Thread)):
-            await session.resume()
+        # if isinstance(channel, (discord.TextChannel, discord.Thread)):
+        #     await session.resume()
         return session
     
     def _clear_session(self, channel: discord.abc.GuildChannel):
@@ -389,6 +527,21 @@ class GPT(commands.Cog):
             message_content.extend([MessageContentElement('image_url', url) for url in image_urls])
         
         return message_content
+    
+    # Notes de l'assistant ------------------------------------------------------
+    
+    def fetch_user_id_from_name(self, guild: discord.Guild, name: str) -> int | None:
+        user = discord.utils.find(lambda u: u.name == name, guild.members)
+        return user.id if user else None
+    
+    def get_user_notes(self, user: discord.User | int) -> str | None:
+        user_id = user.id if isinstance(user, discord.User) else user
+        notes = self.data.get('global').fetchone('SELECT notes FROM memory WHERE user_id = ?', user_id)
+        return notes['notes'] if notes else None
+    
+    def set_user_notes(self, user: discord.User | int, notes: str):
+        user_id = user.id if isinstance(user, discord.User) else user
+        self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, notes) VALUES (?, ?)', user_id, notes)
     
     # Audio --------------------------------------------------------------------
     
@@ -516,7 +669,7 @@ class GPT(commands.Cog):
             async with message.channel.typing():
                 completion = await session.complete()
                 if not completion:
-                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resetmemory`.", mention_author=False)
+                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
                 await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
@@ -597,11 +750,11 @@ class GPT(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
     
-    @app_commands.command(name='resetmemory')
+    @app_commands.command(name='resethistory')
     @app_commands.guild_only()
     @app_commands.default_permissions(manage_messages=True)
-    async def cmd_resetmemory(self, interaction: Interaction):
-        """Réinitialiser la mémoire de l'assistant."""
+    async def cmd_resethistory(self, interaction: Interaction):
+        """Réinitialiser les messages en mémoire de l'assistant."""
         if not isinstance(interaction.channel, discord.abc.GuildChannel):
             return await interaction.response.send_message("**Action impossible** × Cette commande ne fonctionne pas en message privé.", ephemeral=True)
         
@@ -612,5 +765,30 @@ class GPT(commands.Cog):
         session.clear_all_messages()
         await interaction.response.send_message("**Mémoire réinitialisée** · L'historique des messages a été effacé.", ephemeral=True)
         
+    memory_group = app_commands.Group(name='memory', description="Gestion des notes internes de l'assistant")
+
+    @memory_group.command(name='show')
+    async def cmd_show_memory(self, interaction: Interaction):
+        """Consulter les notes de l'assistant associées à vous."""
+        user = interaction.user
+        if not isinstance(user, discord.User):
+            return await interaction.response.send_message("**Erreur** × Impossible de récupérer les informations.", ephemeral=True)
+        
+        notes = self.get_user_notes(user)
+        if not notes:
+            return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
+        
+        embed = discord.Embed(title=f"Notes de l'assistant", description=notes, color=discord.Color(0x000001))
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+    @memory_group.command(name='delete')
+    async def cmd_delete_memory(self, interaction: Interaction):
+        """Supprimer les notes de l'assistant associées à vous."""
+        user = interaction.user
+        if not isinstance(user, discord.User):
+            return await interaction.response.send_message("**Erreur** × Impossible de récupérer les informations.", ephemeral=True)
+        self.set_user_notes(user, '')
+        return await interaction.response.send_message(f"**Notes supprimées** · Les notes de l'assistant sur vous ont été effacées.", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(GPT(bot))
