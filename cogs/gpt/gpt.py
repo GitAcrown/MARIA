@@ -534,12 +534,12 @@ class GPT(commands.Cog):
         user = discord.utils.find(lambda u: u.name == name, guild.members)
         return user.id if user else None
     
-    def get_user_notes(self, user: discord.User | int) -> str | None:
+    def get_user_notes(self, user: discord.User | discord.Member | int) -> str | None:
         user_id = user.id if isinstance(user, discord.User) else user
         notes = self.data.get('global').fetchone('SELECT notes FROM memory WHERE user_id = ?', user_id)
         return notes['notes'] if notes else None
     
-    def set_user_notes(self, user: discord.User | int, notes: str):
+    def set_user_notes(self, user: discord.User | discord.Member | int, notes: str):
         user_id = user.id if isinstance(user, discord.User) else user
         self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, notes) VALUES (?, ?)', user_id, notes)
     
@@ -771,9 +771,6 @@ class GPT(commands.Cog):
     async def cmd_show_memory(self, interaction: Interaction):
         """Consulter les notes de l'assistant associées à vous."""
         user = interaction.user
-        if not isinstance(user, discord.User):
-            return await interaction.response.send_message("**Erreur** × Impossible de récupérer les informations.", ephemeral=True)
-        
         notes = self.get_user_notes(user)
         if not notes:
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
@@ -785,8 +782,6 @@ class GPT(commands.Cog):
     async def cmd_delete_memory(self, interaction: Interaction):
         """Supprimer les notes de l'assistant associées à vous."""
         user = interaction.user
-        if not isinstance(user, discord.User):
-            return await interaction.response.send_message("**Erreur** × Impossible de récupérer les informations.", ephemeral=True)
         self.set_user_notes(user, '')
         return await interaction.response.send_message(f"**Notes supprimées** · Les notes de l'assistant sur vous ont été effacées.", ephemeral=True)
 
