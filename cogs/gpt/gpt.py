@@ -47,8 +47,31 @@ GPT_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_user_notes",
-            "description": "Renvoie les notes associées à un utilisateur.",
+            "name": "get_user_info",
+            "description": "Renvoie une information associée à un utilisateur.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["user", "key"],
+                "properties": {
+                    "user": {
+                        "type": "string",
+                        "description": "Le nom de l'utilisateur dont on veut récupérer les notes.",
+                    },
+                    "key": {
+                        "type": "string",
+                        "description": "La clé de la note à récupérer (ex. 'age', 'ville', etc.). Renvoie l'information de la clé la plus proche si la clé exacte n'est pas trouvée.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_all_user_info",
+            "description": "Renvoie toutes les informations associées à un utilisateur.",
             "strict": True,
             "parameters": {
                 "type": "object",
@@ -66,20 +89,24 @@ GPT_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "set_user_notes",
-            "description": "Modifie les notes associées à un utilisateur.",
+            "name": "set_user_info",
+            "description": "Modifie une information associée à un utilisateur.",
             "strict": True,
             "parameters": {
                 "type": "object",
-                "required": ["notes", "user"],
+                "required": ["user", "key", "value"],
                 "properties": {
-                    "notes": {
-                        "type": "string",
-                        "description": "Les notes à associer à l'utilisateur.",
-                    },
                     "user": {
                         "type": "string",
                         "description": "Le nom de l'utilisateur dont on veut modifier les notes.",
+                    },
+                    "key": {
+                        "type": "string",
+                        "description": "La clé de la note à modifier (ex. 'age', 'ville', etc.).",
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "La nouvelle valeur de la note.",
                     },
                 },
                 "additionalProperties": False,
@@ -394,25 +421,39 @@ class ChatSession:
                 calling_msg = AssistantToolCallChatMessage([call_data])
                 self.add_message(calling_msg) 
                 
-                if tool_call.function.name == 'get_user_notes':
+                if tool_call.function.name == 'get_user_info':
                     user_name = json.loads(tool_call.function.arguments)['user']
+                    key = json.loads(tool_call.function.arguments)['key']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if user_id:
-                        notes = self.__cog.get_user_notes(user_id)
+                        notes = self.__cog.get_user_info(user_id, key)
                         if not notes:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': 'Aucune note'}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
                         else:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': notes}), tool_call.function.name, tool_call.id)
-                elif tool_call.function.name == 'set_user_notes':
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': notes}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'set_user_info':
                     arguments = json.loads(tool_call.function.arguments)
                     user_name = arguments['user']
+                    key = arguments['key']  
+                    value = arguments['value']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if not user_id:
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': 'Utilisateur introuvable'}), tool_call.function.name, tool_call.id)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non trouvé'}), tool_call.function.name, tool_call.id)
                     else:
-                        self.__cog.set_user_notes(user_id, arguments['notes'])
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'notes': arguments['notes']}), tool_call.function.name, tool_call.id)
-                
+                        self.__cog.set_user_info(user_id, key, value)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'get_all_user_info':
+                    user_name = json.loads(tool_call.function.arguments)['user']
+                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
+                    if not user_id:
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Utilisateur non trouvé'}), tool_call.function.name, tool_call.id)
+                    else:
+                        notes = self.__cog.get_all_user_info(user_id)
+                        if not notes:
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
+                        else:
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
+                    
                 # Si y'a un message d'outil, on ajoute la réopnse de l'assistant
                 if tool_msg:
                     self.add_message(tool_msg)
@@ -439,8 +480,10 @@ class GPT(commands.Cog):
         # Table pour stocker les notes de l'assistant sur les utilisateurs
         memory = dataio.TableBuilder(
             '''CREATE TABLE IF NOT EXISTS memory (
-                user_id INTEGER PRIMARY KEY,
-                notes TEXT
+                user_id INTEGER,
+                key TEXT,
+                value TEXT,
+                PRIMARY KEY (user_id, key)
                 )'''
         )
         self.data.link('global', memory)
@@ -479,8 +522,8 @@ class GPT(commands.Cog):
                               system_prompt=config['system_prompt'],
                               temperature=config['temperature'])
         self._sessions[channel.id] = session
-        # if isinstance(channel, (discord.TextChannel, discord.Thread)):
-        #     await session.resume()
+        if isinstance(channel, (discord.TextChannel, discord.Thread)):
+            await session.resume()
         return session
     
     def _clear_session(self, channel: discord.abc.GuildChannel):
@@ -534,14 +577,29 @@ class GPT(commands.Cog):
         user = discord.utils.find(lambda u: u.name == name, guild.members)
         return user.id if user else None
     
-    def get_user_notes(self, user: discord.User | discord.Member | int) -> str | None:
+    def get_user_info(self, user: discord.User | discord.Member | int, key: str) -> str | None:
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
-        notes = self.data.get('global').fetchone('SELECT notes FROM memory WHERE user_id = ?', user_id)
-        return notes['notes'] if notes else None
+        notes = self.data.get('global').fetchone('SELECT value FROM memory WHERE user_id = ? AND key = ?', user_id, key)
+        if not notes:
+            # On cherche la note la plus proche
+            keys = self.data.get('global').fetchall('SELECT key FROM memory WHERE user_id = ?', user_id)
+            closest_key = fuzzy.extract_one(key, [k['key'] for k in keys])
+            if closest_key:
+                notes = self.data.get('global').fetchone('SELECT value FROM memory WHERE user_id = ? AND key = ?', user_id, closest_key[0])
+        return notes['value'] if notes else None
     
-    def set_user_notes(self, user: discord.User | discord.Member | int, notes: str):
+    def get_all_user_info(self, user: discord.User | discord.Member | int) -> dict:
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
-        self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, notes) VALUES (?, ?)', user_id, notes)
+        notes = self.data.get('global').fetchall('SELECT key, value FROM memory WHERE user_id = ?', user_id)
+        return {note['key']: note['value'] for note in notes}
+    
+    def set_user_info(self, user: discord.User | discord.Member | int, key: str, value: str):
+        user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
+        self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, key, value) VALUES (?, ?, ?)', user_id, key, value)
+        
+    def clear_user_info(self, user: discord.User | discord.Member | int):
+        user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
+        self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
     
     # Audio --------------------------------------------------------------------
     
@@ -771,18 +829,21 @@ class GPT(commands.Cog):
     async def cmd_show_memory(self, interaction: Interaction):
         """Consulter les notes de l'assistant associées à vous."""
         user = interaction.user
-        notes = self.get_user_notes(user)
+        notes = self.get_all_user_info(user)
         if not notes:
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
         
-        embed = discord.Embed(title=f"Notes de l'assistant", description=pretty.codeblock(notes), color=discord.Color(0x000001))
+        text = '\n'.join([f"{key} : {value}" for key, value in notes.items()])
+        embed = discord.Embed(title=f"Notes de l'assistant [BETA]", description=pretty.codeblock(text), color=discord.Color(0x000001))
+        embed.set_thumbnail(url=user.display_avatar.url)
+        embed.set_footer(text="Ces notes sont stockées dans une base de données locale.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
     @memory_group.command(name='delete')
     async def cmd_delete_memory(self, interaction: Interaction):
         """Supprimer les notes de l'assistant associées à vous."""
         user = interaction.user
-        self.set_user_notes(user, '')
+        self.clear_user_info(user)
         return await interaction.response.send_message(f"**Notes supprimées** · Les notes de l'assistant sur vous ont été effacées.", ephemeral=True)
 
 async def setup(bot):
