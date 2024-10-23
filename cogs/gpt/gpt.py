@@ -457,7 +457,7 @@ class ChatSession:
                     value = arguments['value']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if not user_id:
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non trouvé'}), tool_call.function.name, tool_call.id)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
                     else:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
@@ -465,11 +465,11 @@ class ChatSession:
                     user_name = json.loads(tool_call.function.arguments)['user']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if not user_id:
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Utilisateur non trouvé'}), tool_call.function.name, tool_call.id)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
                     else:
                         notes = self.__cog.get_all_user_info(user_id)
                         if not notes:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Aucune note trouvée sur cet utilisateur'}), tool_call.function.name, tool_call.id)
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
                     
