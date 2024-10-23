@@ -458,6 +458,8 @@ class ChatSession:
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
                     return await self.complete()
+                else:
+                    self.add_message(calling_msg)
         
         return AssistantChatMessage(content, token_count=usage)
 
