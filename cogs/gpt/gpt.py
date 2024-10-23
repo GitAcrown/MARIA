@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Literal
 
-from anyio import key
 import discord
 import pytz
 import tiktoken
