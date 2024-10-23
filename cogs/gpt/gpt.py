@@ -342,6 +342,9 @@ class ChatSession:
     
     def add_message(self, message: BaseChatMessage):
         self.messages.append(message)
+    
+    def add_messages(self, messages: list[BaseChatMessage]):
+        self.messages.extend(messages)
         
     def get_messages(self, cond: Callable[[BaseChatMessage], bool]):
         return [message for message in self.messages if cond(message)]
@@ -417,7 +420,6 @@ class ChatSession:
                     } 
                 }
                 calling_msg = AssistantToolCallChatMessage([call_data])
-                self.add_message(calling_msg) 
                 
                 if tool_call.function.name == 'get_user_info':
                     user_name = json.loads(tool_call.function.arguments)['user']
@@ -454,7 +456,7 @@ class ChatSession:
                     
                 # Si y'a un message d'outil, on ajoute la réopnse de l'assistant
                 if tool_msg:
-                    self.add_message(tool_msg)
+                    self.add_messages([calling_msg, tool_msg])
                     return await self.complete()
         
         return AssistantChatMessage(content, token_count=usage)
