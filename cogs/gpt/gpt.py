@@ -500,7 +500,7 @@ class ChatSession:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_info_containing_key':
                     key = json.loads(tool_call.function.arguments)['key_search']
-                    notes = self.__cog.get_info_containing_key(key)
+                    notes = self.__cog.get_info_containing_key(self.guild, key)
                     if not notes:
                         tool_msg = ToolChatMessage(json.dumps({'key_search': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
                     else:
@@ -667,10 +667,11 @@ class GPT(commands.Cog):
         notes = self.data.get('global').fetchall('SELECT key, value FROM memory WHERE user_id = ?', user_id)
         return {note['key']: note['value'] for note in notes}
     
-    def get_info_containing_key(self, key: str) -> dict[str, str]:
+    def get_info_containing_key(self, guild: discord.Guild, key: str) -> dict[str, str]:
         """Renvoie toutes les notes associées à une clé."""
         notes = self.data.get('global').fetchall('SELECT user_id, value FROM memory WHERE key LIKE %?%', key) # On cherche tout ce qui contient la clé
-        return {note['user_id']: note['value'] for note in notes}
+        guild_members = {member.id: member.name for member in guild.members}
+        return {guild_members[note['user_id']]: note['value'] for note in notes if note['user_id'] in guild_members}
     
     def set_user_info(self, user: discord.User | discord.Member | int, key: str, value: str):
         """Modifie une note associée à un utilisateur."""
