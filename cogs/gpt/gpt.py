@@ -777,19 +777,21 @@ class GPT(commands.Cog):
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
                 
-                if not completion.content or not completion.content[0].raw_content:
-                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
-                
-                reply = await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
                 if completion.tool_used:
                     try:
                         if completion.tool_used in ['get_user_info', 'get_all_user_info']:
-                            await reply.add_reaction('<:search:1298804292735733770>')
+                            await message.add_reaction('<:search:1298804292735733770>')
                         elif completion.tool_used == 'set_user_info':
-                            await reply.add_reaction('<:save:1298804311706566829>')
+                            await message.add_reaction('<:save:1298804311706566829>')
                     except discord.HTTPException:
-                        logger.error(f"Impossible d'ajouter une réaction au message {message.id}")
+                        pass
+                
+                if not completion.content or not completion.content[0].raw_content:
+                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
+                
+                await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
+                
                 
     # COMMANDES =================================================================
     
