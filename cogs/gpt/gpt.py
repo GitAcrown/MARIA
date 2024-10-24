@@ -354,7 +354,7 @@ class ChatSession:
     
     # Contrôle de l'historique des messages
     
-    async def resume(self, n: int = 10):
+    async def resume(self, n: int = 5):
         """Récupère les X messages précédents du salon pour reconstituer l'historique"""
         if not isinstance(self.channel, (discord.TextChannel, discord.Thread)):
             return
