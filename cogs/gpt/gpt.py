@@ -30,7 +30,7 @@ Tu dois suivre scrupuleusement les instructions de la dernière section ci-aprè
 
 # FONCTIONS
 Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
-Tu peux aussi envoyer des fichiers texte (.txt) en pièce jointe si besoin.
+Tu peux envoyer du contenu texte sous forme de fichier texte. N'envoie pas de lien vers le fichier, il est envoyé directement.
 
 # INFORMATIONS
 SALON : {data['channel_name']}
@@ -550,7 +550,7 @@ class ChatSession:
                     content = arguments['content']
                     filename = arguments['filename']
                     file = self.__cog.send_as_txt(content, filename + '.txt' if not filename.endswith('.txt') else filename)
-                    tool_msg = ToolChatMessage(f"Succès : fichier attaché à la réponse", tool_call.function.name, tool_call.id)
+                    tool_msg = ToolChatMessage(f"Le fichier sera attaché à la réponse", tool_call.function.name, tool_call.id)
                     
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
