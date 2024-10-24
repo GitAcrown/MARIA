@@ -10,6 +10,7 @@ from typing import Callable, Literal
 
 import discord
 import pytz
+import tabulate
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
@@ -631,7 +632,7 @@ class GPT(commands.Cog):
                 notes = self.data.get('global').fetchone('SELECT value FROM memory WHERE user_id = ? AND key = ?', user_id, closest_key[0])
         return notes['value'] if notes else None
     
-    def get_all_user_info(self, user: discord.User | discord.Member | int) -> dict:
+    def get_all_user_info(self, user: discord.User | discord.Member | int) -> dict[str, str]:
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         notes = self.data.get('global').fetchall('SELECT key, value FROM memory WHERE user_id = ?', user_id)
         return {note['key']: note['value'] for note in notes}
@@ -894,8 +895,8 @@ class GPT(commands.Cog):
         if not notes:
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
         
-        text = '\n'.join([f"{key} : {value}" for key, value in notes.items()])
-        embed = discord.Embed(title=f"Notes de l'assistant [BETA]", description=pretty.codeblock(text), color=discord.Color(0x000001))
+        table = tabulate.tabulate(notes.items(), headers=['Clé', 'Valeur'], tablefmt='simple')
+        embed = discord.Embed(title=f"Notes de l'assistant [BETA]", description=pretty.codeblock(table, lang='css'), color=discord.Color(0x000001))
         embed.set_thumbnail(url=user.display_avatar.url)
         embed.set_footer(text="Ces notes sont stockées dans une base de données locale.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
