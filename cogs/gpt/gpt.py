@@ -10,7 +10,6 @@ from typing import Callable, Literal
 
 import discord
 import pytz
-from regex import F
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
@@ -28,9 +27,7 @@ La discussion se déroule sur un salon textuel Discord dont tu disposes de l'his
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
 Tu dois suivre scrupuleusement les instructions de la dernière section ci-après.
 
-# FONCTIONS
 Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
-Tu peux envoyer du contenu texte sous forme de fichier texte. N'envoie pas de lien vers le fichier, il est envoyé directement.
 
 # INFORMATIONS
 SALON : {data['channel_name']}
@@ -438,7 +435,7 @@ class ChatSession:
         counter = 0
         while self._active_completion:
             await asyncio.sleep(0.1)
-            if counter > 600: # ~60s
+            if counter > 300: # ~30s
                 break
             counter += 1 # Garde fou au cas où l'IA ne répondrait pas à une requête précédente
         self._active_completion = True
@@ -474,7 +471,7 @@ class ChatSession:
         
         if ENABLE_TOOL_USE:
             tool_msg = None
-            if message.tool_calls:
+            if message.tool_calls and stop == 'tool_calls':
                 tool_call = message.tool_calls[0]
                 call_data = {
                     'id': tool_call.id,
@@ -532,6 +529,8 @@ class ChatSession:
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
                     return await self.complete(tool_used=tool_call.function.name, file=file)
+                else:
+                    self.add_messages([calling_msg])
         
         if not content and not retry:
             return await self.complete(retry=True)
