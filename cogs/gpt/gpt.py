@@ -406,7 +406,7 @@ class ChatSession:
     
     # Interaction avec l'IA
     
-    async def complete(self, tool_used: str | None = None) -> AssistantChatMessage | ToolChatMessage | None:
+    async def complete(self, tool_used: str | None = None, retry: bool = False) -> AssistantChatMessage | ToolChatMessage | None:
         messages = [message.to_dict() for message in self.get_context()]
         
         counter = 0
@@ -456,7 +456,6 @@ class ChatSession:
                         'name': tool_call.function.name
                     }
                 }
-                tool_used = tool_call.function.name
                 calling_msg = AssistantToolCallChatMessage([call_data])
                 
                 if tool_call.function.name == 'get_user_info':
@@ -495,6 +494,9 @@ class ChatSession:
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
                     return await self.complete(tool_used=tool_call.function.name)
+        
+        if not content and not retry:
+            return await self.complete(retry=True)
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
         answer_msg.tool_used = tool_used
@@ -775,18 +777,20 @@ class GPT(commands.Cog):
             async with message.channel.typing():
                 completion = await session.complete()
                 if not completion:
+                    logger.error(f"Error while generating completion for message {message.id}")
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
                 if not completion.content or not completion.content[0].raw_content:
-                    return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
+                    logger.error(f"Empty completion: {completion}")
+                    return await message.reply("**Erreur OpenAI** × L'API n'a pas renvoyé de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, contactez @acrone ou vérifiez l'état des serveurs de GPT4o-mini.", mention_author=False)
                 
                 content = completion.content[0].raw_content
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
                 if completion.tool_used == 'get_user_info':
-                    content += "\n-# <:search:1298816145356492842> Recherche de note"
+                    content += "\n-# <:search:1298816145356492842> Recherche de note effectuée"
                 elif completion.tool_used == 'get_all_user_info':
-                    content += "\n-# <:search:1298816145356492842> Récapitulatif des notes"
+                    content += "\n-# <:search:1298816145356492842> Récapitulatif des notes effectué"
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Notes mises à jour"
                 
