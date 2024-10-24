@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import logging
@@ -335,6 +336,8 @@ class ChatSession:
         
         self.messages : list[BaseChatMessage] = []
         
+        self._active_completion = False
+        
     @property
     def system_prompt(self) -> BaseChatMessage:
         data = {
@@ -402,6 +405,15 @@ class ChatSession:
     
     async def complete(self) -> AssistantChatMessage | ToolChatMessage | None:
         messages = [message.to_dict() for message in self.get_context()]
+        
+        counter = 0
+        while self._active_completion:
+            await asyncio.sleep(0.1)
+            if counter > 100: # ~10s
+                break
+            counter += 1 # Garde fou au cas où l'IA ne répondrait pas à une requête précédente
+        self._active_completion = True
+        
         try:
             completion = await self.__cog.client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -409,16 +421,19 @@ class ChatSession:
                 max_tokens=self.max_completion_tokens,
                 temperature=self.temperature,
                 tools=GPT_TOOLS if ENABLE_TOOL_USE else [], # type: ignore
-                tool_choice='auto'
+                tool_choice='auto',
+                timeout=30
             )
         except Exception as e:
             if 'invalid_image_url' in str(e): 
                 logger.error(f'Error while generating completion: {e}\n-- Deleting messages with images...')
-                # Erreur de requête (souvent les images) : on supprime l'historique des messages contenant des images
                 self.clear_messages(lambda message: any([element.type == 'image_url' for element in message.content]))
                 return await self.complete()
             logger.error(f'Error while generating completion: {e}')
             raise e
+        finally:
+            self._active_completion = False
+            
         if not completion.choices:
             return None
         
@@ -567,6 +582,11 @@ class GPT(commands.Cog):
             else:
                 content = f'{author_name}: {content}'
             message_content.append(MessageContentElement('text', content))
+        else:
+            # On regarde si y'a pas de texte dans un embed
+            for embed in message.embeds:
+                if embed.description:
+                    message_content.append(MessageContentElement('text', embed.description))
         
         image_urls = []
         for msg in [message, ref_message]:
