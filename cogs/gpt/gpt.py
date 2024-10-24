@@ -27,7 +27,7 @@ FULL_SYSTEM_PROMPT = lambda data: f"""# FONCTIONNEMENT INTERNE
 La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
 Tu es capable de voir les images que les utilisateurs envoient.
-Tu disposes de trois fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
+Tu disposes de fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
 Tu suis scrupuleusement les instructions ci-après.
 
 # INFORMATIONS
@@ -80,6 +80,25 @@ GPT_TOOLS = [
                     "user": {
                         "type": "string",
                         "description": "Le nom de l'utilisateur dont on veut récupérer les notes.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_info_containing_key",
+            "description": "Renvoie toutes les informations des différents utilisateurs contenant une clé.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["key_search"],
+                "properties": {
+                    "key_search": {
+                        "type": "string",
+                        "description": "Clé à rechercher dans les notes des utilisateurs. Cette clé peut être partielle.",
                     }
                 },
                 "additionalProperties": False,
@@ -468,17 +487,6 @@ class ChatSession:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': notes}), tool_call.function.name, tool_call.id)
-                elif tool_call.function.name == 'set_user_info':
-                    arguments = json.loads(tool_call.function.arguments)
-                    user_name = arguments['user']
-                    key = arguments['key']  
-                    value = arguments['value']
-                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
-                    if not user_id:
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
-                    else:
-                        self.__cog.set_user_info(user_id, key, value)
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_all_user_info':
                     user_name = json.loads(tool_call.function.arguments)['user']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
@@ -490,6 +498,24 @@ class ChatSession:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Aucune note trouvée sur cet utilisateur'}), tool_call.function.name, tool_call.id)
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'get_info_containing_key':
+                    key = json.loads(tool_call.function.arguments)['key_search']
+                    notes = self.__cog.get_info_containing_key(key)
+                    if not notes:
+                        tool_msg = ToolChatMessage(json.dumps({'key_search': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
+                    else:
+                        tool_msg = ToolChatMessage(json.dumps({'key_search': key, 'value': notes}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'set_user_info':
+                    arguments = json.loads(tool_call.function.arguments)
+                    user_name = arguments['user']
+                    key = arguments['key']  
+                    value = arguments['value']
+                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
+                    if not user_id:
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
+                    else:
+                        self.__cog.set_user_info(user_id, key, value)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
                     
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
@@ -624,6 +650,7 @@ class GPT(commands.Cog):
         return user.id if user else None
     
     def get_user_info(self, user: discord.User | discord.Member | int, key: str) -> str | None:
+        """Renvoie une note associée à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         notes = self.data.get('global').fetchone('SELECT value FROM memory WHERE user_id = ? AND key = ?', user_id, key)
         if not notes:
@@ -635,19 +662,28 @@ class GPT(commands.Cog):
         return notes['value'] if notes else None
     
     def get_all_user_info(self, user: discord.User | discord.Member | int) -> dict[str, str]:
+        """Renovie toutes les notes associées à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         notes = self.data.get('global').fetchall('SELECT key, value FROM memory WHERE user_id = ?', user_id)
         return {note['key']: note['value'] for note in notes}
     
+    def get_info_containing_key(self, key: str) -> dict[str, str]:
+        """Renvoie toutes les notes associées à une clé."""
+        notes = self.data.get('global').fetchall('SELECT user_id, value FROM memory WHERE key LIKE %?%', key) # On cherche tout ce qui contient la clé
+        return {note['user_id']: note['value'] for note in notes}
+    
     def set_user_info(self, user: discord.User | discord.Member | int, key: str, value: str):
+        """Modifie une note associée à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('INSERT OR REPLACE INTO memory(user_id, key, value) VALUES (?, ?, ?)', user_id, key, value)
         
     def delete_user_info(self, user: discord.User | discord.Member | int, key: str):
+        """Supprime une note associée à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ? AND key = ?', user_id, key)
         
     def clear_user_info(self, user: discord.User | discord.Member | int):
+        """Supprime toutes les notes associées à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
     
@@ -788,11 +824,13 @@ class GPT(commands.Cog):
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
                 if completion.tool_used == 'get_user_info':
-                    content += "\n-# <:search:1298816145356492842> Recherche de note effectuée"
+                    content += "\n-# <:search:1298816145356492842> Recherche de note"
                 elif completion.tool_used == 'get_all_user_info':
-                    content += "\n-# <:search:1298816145356492842> Récapitulatif des notes effectué"
+                    content += "\n-# <:summary:1298974192733261934> Récapitulatif des notes"
+                elif completion.tool_used == 'get_info_containing_key':
+                    content += "\n-# <:search_key:1298973550530793472> Recherche de notes par clef"
                 elif completion.tool_used == 'set_user_info':
-                    content += "\n-# <:write:1298816135722172617> Notes mises à jour"
+                    content += "\n-# <:write:1298816135722172617> Note mise à jour"
                 
                 await message.reply(content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
