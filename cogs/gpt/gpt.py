@@ -783,10 +783,12 @@ class GPT(commands.Cog):
                 content = completion.content[0].raw_content
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
-                if completion.tool_used in ('get_user_info', 'get_all_user_info'):
-                    content += "\n-# <:search:1298814474899423313> Recherche dans les notes effectuée"
+                if completion.tool_used == 'get_user_info':
+                    content += "\n-# <:search:1298816145356492842> Recherche de note"
+                elif completion.tool_used == 'get_all_user_info':
+                    content += "\n-# <:search:1298816145356492842> Récapitulatif des notes"
                 elif completion.tool_used == 'set_user_info':
-                    content += "\n-# <:write:1298814618097025044> Notes mises à jour"
+                    content += "\n-# <:write:1298816135722172617> Notes mises à jour"
                 
                 await message.reply(content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
