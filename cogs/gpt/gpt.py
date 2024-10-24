@@ -669,7 +669,7 @@ class GPT(commands.Cog):
     
     def get_info_containing_key(self, guild: discord.Guild, key: str) -> dict[str, str]:
         """Renvoie toutes les notes associées à une clé."""
-        notes = self.data.get('global').fetchall('SELECT user_id, value FROM memory WHERE key LIKE %?%', key) # On cherche tout ce qui contient la clé
+        notes = self.data.get('global').fetchall("SELECT user_id, value FROM memory WHERE key LIKE '%?%'", key) # On cherche tout ce qui contient la clé
         guild_members = {member.id: member.name for member in guild.members}
         return {guild_members[note['user_id']]: note['value'] for note in notes if note['user_id'] in guild_members}
     
