@@ -211,6 +211,8 @@ class BaseChatMessage:
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls or []
         
+        self._tool_used : str | None = None
+        
     def __repr__(self):
         return f'<BaseChatMessage role={self.role} content={self.content} name={self.name}>'
     
@@ -440,9 +442,9 @@ class ChatSession:
         message = completion.choices[0].message
         content = message.content if message.content else ''
         usage = completion.usage.total_tokens if completion.usage else 0
+        tool_msg = None
         
         if ENABLE_TOOL_USE:
-            tool_msg = None
             if message.tool_calls:
                 tool_call = message.tool_calls[0]
                 call_data = {
@@ -451,7 +453,7 @@ class ChatSession:
                     'function': {
                         'arguments': tool_call.function.arguments,
                         'name': tool_call.function.name
-                    } 
+                    }
                 }
                 calling_msg = AssistantToolCallChatMessage([call_data])
                 
@@ -488,12 +490,13 @@ class ChatSession:
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
                     
-                # Si y'a un message d'outil, on ajoute la réopnse de l'assistant
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
                     return await self.complete()
         
-        return AssistantChatMessage(content, token_count=usage)
+        answer_msg = AssistantChatMessage(content, token_count=usage)
+        answer_msg._tool_used = tool_msg.name if tool_msg else None
+        return answer_msg
 
 
 class GPT(commands.Cog):
@@ -772,6 +775,17 @@ class GPT(commands.Cog):
                 if not completion:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
+                
+                # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
+                if completion._tool_used:
+                    try:
+                        if completion._tool_used in ['get_user_info', 'get_all_user_info']:
+                            await message.add_reaction('🔍')
+                        elif completion._tool_used == 'set_user_info':
+                            await message.add_reaction('✏️')
+                    except discord.HTTPException:
+                        pass
+                
                 if not completion.content or not completion.content[0].raw_content:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
