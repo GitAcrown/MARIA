@@ -472,7 +472,7 @@ class ChatSession:
                 temperature=self.temperature,
                 tools=GPT_TOOLS if ENABLE_TOOL_USE else [], # type: ignore
                 tool_choice='auto',
-                timeout=20
+                timeout=30
             )
         except Exception as e:
             if 'invalid_image_url' in str(e): 
