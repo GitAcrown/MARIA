@@ -459,7 +459,7 @@ class ChatSession:
         counter = 0
         while self._active_completion:
             await asyncio.sleep(0.1)
-            if counter > 100: # ~10s
+            if counter > 600: # ~60s
                 break
             counter += 1 # Garde fou au cas où l'IA ne répondrait pas à une requête précédente
         self._active_completion = True
@@ -472,7 +472,7 @@ class ChatSession:
                 temperature=self.temperature,
                 tools=GPT_TOOLS if ENABLE_TOOL_USE else [], # type: ignore
                 tool_choice='auto',
-                timeout=30
+                timeout=20
             )
         except Exception as e:
             if 'invalid_image_url' in str(e): 
