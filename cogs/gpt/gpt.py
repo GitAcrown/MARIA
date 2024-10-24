@@ -23,12 +23,14 @@ from common.utils import fuzzy, pretty
 
 logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
-FULL_SYSTEM_PROMPT = lambda data: f"""# FONCTIONNEMENT INTERNE
+FULL_SYSTEM_PROMPT = lambda data: f"""# META
 La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
-Tu es capable de voir les images que les utilisateurs envoient.
-Tu disposes de fonctions te permettant de gérer des notes sur les utilisateurs, consulte-les quand tu as besoin d'infos sur un utilisateur.
-Tu suis scrupuleusement les instructions ci-après.
+Tu dois suivre scrupuleusement les instructions de la dernière section ci-après.
+
+# FONCTIONS
+Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
+Tu peux aussi envoyer des fichiers texte (.txt) en pièce jointe si besoin.
 
 # INFORMATIONS
 SALON : {data['channel_name']}
@@ -39,8 +41,8 @@ DATE/HEURE : {data['current_date']}
 # INSTRUCTIONS
 {data['system_prompt']}"""
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
-MAX_COMPLETION_TOKENS = 300
-MAX_CONTEXT_TOKENS = 4096
+MAX_COMPLETION_TOKENS = 500
+MAX_CONTEXT_TOKENS = 5000
 ENABLE_TOOL_USE : bool = True
 
 GPT_TOOLS = [
@@ -132,6 +134,29 @@ GPT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_as_txt",
+            "description": "Envoyer un contenu texte sous forme de fichier texte .txt.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["content", "filename"],
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Le contenu texte à envoyer.",
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Le nom du fichier texte à envoyer.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    }
 ]
 
 def clean_name(name: str) -> str:
@@ -220,7 +245,8 @@ class BaseChatMessage:
                  timestamp: datetime | None = None,
                  token_count: int | None = None,
                  tool_call_id: str | None = None,
-                 tool_calls: list[dict] | None = None):
+                 tool_calls: list[dict] | None = None,
+                 attachment: discord.File | None = None):
         self.role = role
         
         self.__content = content
@@ -230,6 +256,7 @@ class BaseChatMessage:
         
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls or []
+        self.attachment = attachment
         
         self.tool_used : str | None = None
         
@@ -285,27 +312,28 @@ class SystemChatMessage(BaseChatMessage):
     """Représente un message du système, qui n'est pas généré par un utilisateur ou un assistant"""
     def __init__(self, 
                  content: str):
-        super().__init__(role='system', content=content, name=None, timestamp=None, token_count=None, tool_call_id=None)
+        super().__init__(role='system', content=content, name=None, timestamp=None, token_count=None, tool_call_id=None, attachment=None)
 
 class UserChatMessage(BaseChatMessage):
     """Repésente un message d'un utilisateur, avec un nom associé"""
     def __init__(self, 
                  content: str | list[MessageContentElement],
                  name: str | discord.User | discord.Member):
-        super().__init__(role='user', content=content, name=name, timestamp=None, token_count=None, tool_call_id=None)
+        super().__init__(role='user', content=content, name=name, timestamp=None, token_count=None, tool_call_id=None, attachment=None)
 
 class AssistantChatMessage(BaseChatMessage):
     """Représente une réponse générée par l'IA"""
     def __init__(self, 
                  content: str | list[MessageContentElement],
-                 token_count: int | None = None): # Le nb de tokens est renvoyé par l'API donc on peut le passer en paramètre
-        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None)
+                 token_count: int | None = None,
+                 attachment: discord.File | None = None): # Le nb de tokens est renvoyé par l'API donc on peut le passer en paramètre
+        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None, attachment=attachment)
 
 class AssistantToolCallChatMessage(BaseChatMessage):
     """Représente un message d'assistant qui appelle un outil"""
     def __init__(self,
                  tool_calls: list[dict]):
-        super().__init__(role='assistant', content="Appel d'outil...", name=None, timestamp=None, token_count=None, tool_call_id=None, tool_calls=tool_calls)
+        super().__init__(role='assistant', content="Appel d'outil...", name=None, timestamp=None, token_count=None, tool_call_id=None, tool_calls=tool_calls, attachment=None)
         
     def to_dict(self) -> dict:
         return {
@@ -319,7 +347,7 @@ class ToolChatMessage(BaseChatMessage):
                  content: str,
                  name: str,
                  tool_call_id: str):
-        super().__init__(role='tool', content=content, name=name, timestamp=None, token_count=None, tool_call_id=tool_call_id)
+        super().__init__(role='tool', content=content, name=name, timestamp=None, token_count=None, tool_call_id=tool_call_id, attachment=None)
         
     def to_dict(self) -> dict:
         return {
@@ -425,7 +453,7 @@ class ChatSession:
     
     # Interaction avec l'IA
     
-    async def complete(self, tool_used: str | None = None, retry: bool = False) -> AssistantChatMessage | ToolChatMessage | None:
+    async def complete(self, retry: bool = False, **kwargs) -> AssistantChatMessage | ToolChatMessage | None:
         messages = [message.to_dict() for message in self.get_context()]
         
         counter = 0
@@ -461,6 +489,7 @@ class ChatSession:
         
         message = completion.choices[0].message
         content = message.content if message.content else ''
+        file = None
         usage = completion.usage.total_tokens if completion.usage else 0
         
         if ENABLE_TOOL_USE:
@@ -516,16 +545,23 @@ class ChatSession:
                     else:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
+                elif tool_call.function.name == 'send_as_txt':
+                    arguments = json.loads(tool_call.function.arguments)
+                    content = arguments['content']
+                    filename = arguments['filename']
+                    file = self.__cog.send_as_txt(content, filename + '.txt' if not filename.endswith('.txt') else filename)
+                    tool_msg = ToolChatMessage(f"Succès : fichier {filename} attaché à la réponse (aucune action nécessaire)", tool_call.function.name, tool_call.id)
                     
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
-                    return await self.complete(tool_used=tool_call.function.name)
+                    return await self.complete(tool_used=tool_call.function.name, file=file)
         
         if not content and not retry:
             return await self.complete(retry=True)
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
-        answer_msg.tool_used = tool_used
+        answer_msg.tool_used = kwargs.get('tool_used')
+        answer_msg.attachment = kwargs.get('file')
         return answer_msg
 
 
@@ -687,6 +723,16 @@ class GPT(commands.Cog):
         """Supprime toutes les notes associées à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
+        
+    # Utilitaires --------------------------------------------------------------
+    
+    def send_as_txt(self, content: str, filename: str) -> discord.File:
+        """Permet d'envoyer un contenu texte sous forme de fichier texte."""
+        txt_file = io.BytesIO(content.encode('utf-8'))
+        txt_file.name = filename
+        f = discord.File(txt_file, filename)
+        txt_file.close()
+        return f
     
     # Audio --------------------------------------------------------------------
     
@@ -832,8 +878,12 @@ class GPT(commands.Cog):
                     content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Mise à jour de note"
+                elif completion.tool_used == 'send_as_txt':
+                    content += "\n-# <:fileupload:1299061333190512680> Conversion en fichier texte"
                 
-                await message.reply(content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
+                if completion.attachment:
+                    return await message.reply(content, mention_author=False, file=completion.attachment, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
+                await message.reply(content, mention_author=False, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
                 
     # COMMANDES =================================================================
