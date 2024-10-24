@@ -658,7 +658,7 @@ class GPT(commands.Cog):
     # Notes de l'assistant ------------------------------------------------------
     
     def fetch_user_id_from_name(self, guild: discord.Guild, name: str) -> int | None:
-        user = discord.utils.find(lambda u: u.name == name, guild.members)
+        user = discord.utils.find(lambda u: u.name == name.lower(), guild.members)
         return user.id if user else None
     
     def get_user_info(self, user: discord.User | discord.Member | int, key: str) -> str | None:
