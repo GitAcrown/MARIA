@@ -211,7 +211,7 @@ class BaseChatMessage:
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls or []
         
-        self._tool_used : str | None = None
+        self.tool_used : str | None = None
         
     def __repr__(self):
         return f'<BaseChatMessage role={self.role} content={self.content} name={self.name}>'
@@ -497,7 +497,7 @@ class ChatSession:
                     return await self.complete()
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
-        answer_msg._tool_used = tool_used
+        answer_msg.tool_used = tool_used
         return answer_msg
 
 
@@ -779,14 +779,14 @@ class GPT(commands.Cog):
                 session.add_message(completion)
                 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
-                if completion._tool_used:
+                if completion.tool_used:
                     try:
-                        if completion._tool_used in ['get_user_info', 'get_all_user_info']:
+                        if completion.tool_used in ['get_user_info', 'get_all_user_info']:
                             await message.add_reaction('🔍')
-                        elif completion._tool_used == 'set_user_info':
+                        elif completion.tool_used == 'set_user_info':
                             await message.add_reaction('✏️')
                     except discord.HTTPException:
-                        pass
+                        logger.error(f"Impossible d'ajouter une réaction au message {message.id}")
                 
                 if not completion.content or not completion.content[0].raw_content:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
