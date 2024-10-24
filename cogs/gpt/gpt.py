@@ -133,29 +133,6 @@ GPT_TOOLS = [
                 "additionalProperties": False,
             },
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "send_as_txt",
-            "description": "Envoyer un contenu texte sous forme de fichier texte .txt.",
-            "strict": True,
-            "parameters": {
-                "type": "object",
-                "required": ["content", "filename"],
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "Le contenu texte à envoyer en utf-8.",
-                    },
-                    "filename": {
-                        "type": "string",
-                        "description": "Le nom du fichier texte à envoyer.",
-                    }
-                },
-                "additionalProperties": False,
-            },
-        },
     }
 ]
 
@@ -490,6 +467,7 @@ class ChatSession:
             return None
         
         message = completion.choices[0].message
+        stop = completion.choices[0].finish_reason
         content = message.content if message.content else None
         file = None
         usage = completion.usage.total_tokens if completion.usage else 0
@@ -550,13 +528,7 @@ class ChatSession:
                     else:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
-                elif tool_call.function.name == 'send_as_txt':
-                    arguments = json.loads(tool_call.function.arguments)
-                    content = arguments['content']
-                    filename = clean_name(arguments['filename'])
-                    file = self.__cog.send_as_txt(content, filename + '.txt' if not filename.endswith('.txt') else filename)
-                    tool_msg = ToolChatMessage(f"Le fichier sera attaché à la réponse", tool_call.function.name, tool_call.id)
-                    
+                
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
                     return await self.complete(tool_used=tool_call.function.name, file=file)
@@ -728,16 +700,6 @@ class GPT(commands.Cog):
         """Supprime toutes les notes associées à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
-        
-    # Utilitaires --------------------------------------------------------------
-    
-    def send_as_txt(self, content: str, filename: str) -> discord.File:
-        """Permet d'envoyer un contenu texte sous forme de fichier texte."""
-        txt_file = io.BytesIO(content.encode('utf-8'))
-        txt_file.name = filename
-        f = discord.File(txt_file, filename)
-        txt_file.close()
-        return f
     
     # Audio --------------------------------------------------------------------
     
