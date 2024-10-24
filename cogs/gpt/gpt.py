@@ -844,8 +844,6 @@ class GPT(commands.Cog):
                     content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Mise à jour de note"
-                elif completion.tool_used == 'send_as_txt':
-                    content += "\n-# <:fileupload:1299061333190512680> Conversion en fichier texte"
                 
                 if completion.attachment:
                     return await message.reply(content, mention_author=False, file=completion.attachment, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
