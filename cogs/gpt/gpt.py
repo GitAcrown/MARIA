@@ -627,11 +627,11 @@ class GPT(commands.Cog):
             else:
                 content = f'{author_name}: {content}'
             message_content.append(MessageContentElement('text', content))
-        else:
-            # On regarde si y'a pas de texte dans un embed
-            for embed in message.embeds:
-                if embed.description:
-                    message_content.append(MessageContentElement('text', embed.description))
+
+        # On regarde si y'a pas de texte dans un embed
+        for embed in message.embeds:
+            if embed.description:
+                message_content.append(MessageContentElement('text', f'[Embed] {embed.description}'))
         
         image_urls = []
         for msg in [message, ref_message]:
