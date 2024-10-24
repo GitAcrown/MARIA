@@ -643,16 +643,19 @@ class GPT(commands.Cog):
             # Pièces jointes
             for attachment in msg.attachments:
                 if attachment.content_type and attachment.content_type.startswith('image'):
+                    url = re.sub(r'\?.*$', '', attachment.url)
                     image_urls.append(attachment.url)
             # Dans le texte d'un message
             for match in re.finditer(r'(https?://[^\s]+)', msg.content):
                 url = match.group(0)
+                url = re.sub(r'\?.*$', '', url)
                 if url.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
                     image_urls.append(url)
             # Dans le contenu d'un embed
             for embed in msg.embeds:
                 if embed.image:
-                    image_urls.append(embed.image.url)
+                    url = re.sub(r'\?.*$', '', embed.image.url)
+                    image_urls.append(url)
         if image_urls:
             message_content.extend([MessageContentElement('image_url', url) for url in image_urls])
         
