@@ -10,7 +10,6 @@ from typing import Callable, Literal
 
 import discord
 import pytz
-import tabulate
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
@@ -895,7 +894,7 @@ class GPT(commands.Cog):
         if not notes:
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
         
-        table = tabulate.tabulate(notes.items(), headers=['Clé', 'Valeur'], tablefmt='simple')
+        table = '\n'.join(sorted([f"{key} · {value}" for key, value in notes.items()]))
         embed = discord.Embed(title=f"Notes de l'assistant [BETA]", description=pretty.codeblock(table, lang='css'), color=discord.Color(0x000001))
         embed.set_thumbnail(url=user.display_avatar.url)
         embed.set_footer(text="Ces notes sont stockées dans une base de données locale.")
