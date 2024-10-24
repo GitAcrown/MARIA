@@ -442,9 +442,10 @@ class ChatSession:
         message = completion.choices[0].message
         content = message.content if message.content else ''
         usage = completion.usage.total_tokens if completion.usage else 0
-        tool_msg = None
+        tool_used = None
         
         if ENABLE_TOOL_USE:
+            tool_msg = None
             if message.tool_calls:
                 tool_call = message.tool_calls[0]
                 call_data = {
@@ -455,6 +456,7 @@ class ChatSession:
                         'name': tool_call.function.name
                     }
                 }
+                tool_used = tool_call.function.name
                 calling_msg = AssistantToolCallChatMessage([call_data])
                 
                 if tool_call.function.name == 'get_user_info':
@@ -495,7 +497,7 @@ class ChatSession:
                     return await self.complete()
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
-        answer_msg._tool_used = tool_msg.name if tool_msg else None
+        answer_msg._tool_used = tool_used
         return answer_msg
 
 
