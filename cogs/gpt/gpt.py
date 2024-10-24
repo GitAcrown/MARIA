@@ -239,7 +239,7 @@ class MessageContentElement:
 class BaseChatMessage:
     def __init__(self, 
                  role: Literal['user', 'assistant', 'system', 'tool'], 
-                 content: str | list[MessageContentElement],
+                 content: str | list[MessageContentElement] | None = None,
                  *,
                  name: str | discord.User | discord.Member | None = None,
                  timestamp: datetime | None = None,
@@ -274,6 +274,8 @@ class BaseChatMessage:
             return [MessageContentElement(type='text', raw_content=self.__content)]
         elif isinstance(self.__content, list):
             return self.__content
+        elif not self.__content:
+            return [MessageContentElement('text', '[Aucun contenu]')]
         return []
     
     @property
@@ -324,7 +326,7 @@ class UserChatMessage(BaseChatMessage):
 class AssistantChatMessage(BaseChatMessage):
     """Représente une réponse générée par l'IA"""
     def __init__(self, 
-                 content: str | list[MessageContentElement],
+                 content: str | list[MessageContentElement] | None,
                  token_count: int | None = None,
                  attachment: discord.File | None = None): # Le nb de tokens est renvoyé par l'API donc on peut le passer en paramètre
         super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None, attachment=attachment)
@@ -488,7 +490,7 @@ class ChatSession:
             return None
         
         message = completion.choices[0].message
-        content = message.content if message.content else ''
+        content = message.content if message.content else None
         file = None
         usage = completion.usage.total_tokens if completion.usage else 0
         
