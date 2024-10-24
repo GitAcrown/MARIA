@@ -146,7 +146,7 @@ GPT_TOOLS = [
                 "properties": {
                     "content": {
                         "type": "string",
-                        "description": "Le contenu texte à envoyer.",
+                        "description": "Le contenu texte à envoyer en utf-8.",
                     },
                     "filename": {
                         "type": "string",
@@ -509,8 +509,9 @@ class ChatSession:
                 calling_msg = AssistantToolCallChatMessage([call_data])
                 
                 if tool_call.function.name == 'get_user_info':
-                    user_name = json.loads(tool_call.function.arguments, encoding='utf-8')['user']
-                    key = json.loads(tool_call.function.arguments)['key']
+                    arguments = json.loads(tool_call.function.arguments)
+                    user_name = arguments['user']
+                    key = arguments['key']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if user_id:
                         notes = self.__cog.get_user_info(user_id, key)
@@ -519,7 +520,8 @@ class ChatSession:
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_all_user_info':
-                    user_name = json.loads(tool_call.function.arguments, encoding='utf-8')['user']
+                    arguments = json.loads(tool_call.function.arguments)
+                    user_name = arguments['user']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if not user_id:
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
@@ -530,14 +532,15 @@ class ChatSession:
                         else:
                             tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_info_containing_key':
-                    key = json.loads(tool_call.function.arguments, encoding='utf-8')['key_search']
+                    arguments = json.loads(tool_call.function.arguments)
+                    key = arguments['key_search']
                     notes = self.__cog.get_info_containing_key(self.guild, key)
                     if not notes:
                         tool_msg = ToolChatMessage(json.dumps({'key_search': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
                     else:
                         tool_msg = ToolChatMessage(json.dumps({'key_search': key, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'set_user_info':
-                    arguments = json.loads(tool_call.function.arguments, encoding='utf-8')
+                    arguments = json.loads(tool_call.function.arguments)
                     user_name = arguments['user']
                     key = arguments['key']  
                     value = arguments['value']
@@ -548,9 +551,9 @@ class ChatSession:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'send_as_txt':
-                    arguments = json.loads(tool_call.function.arguments, encoding='utf-8')
+                    arguments = json.loads(tool_call.function.arguments)
                     content = arguments['content']
-                    filename = arguments['filename']
+                    filename = clean_name(arguments['filename'])
                     file = self.__cog.send_as_txt(content, filename + '.txt' if not filename.endswith('.txt') else filename)
                     tool_msg = ToolChatMessage(f"Le fichier sera attaché à la réponse", tool_call.function.name, tool_call.id)
                     
