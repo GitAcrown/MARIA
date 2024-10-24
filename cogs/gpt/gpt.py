@@ -10,6 +10,7 @@ from typing import Callable, Literal
 
 import discord
 import pytz
+from regex import F
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
@@ -776,21 +777,18 @@ class GPT(commands.Cog):
                 if not completion:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 session.add_message(completion)
-                
-                # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
-                if completion.tool_used:
-                    try:
-                        if completion.tool_used in ['get_user_info', 'get_all_user_info']:
-                            await message.add_reaction('<:search:1298806107900477440>')
-                        elif completion.tool_used == 'set_user_info':
-                            await message.add_reaction('<:save:1298806120122548224>')
-                    except discord.HTTPException:
-                        pass
-                
                 if not completion.content or not completion.content[0].raw_content:
                     return await message.reply("**Erreur** × Je n'ai pas pu générer de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
                 
-                await message.reply(completion.content[0].raw_content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
+                content = completion.content[0].raw_content
+
+                # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
+                if completion.tool_used in ('get_user_info', 'get_all_user_info'):
+                    content += "\n-# Recherche dans les notes effectuée"
+                elif completion.tool_used == 'set_user_info':
+                    content += "\n-# Notes mises à jour"
+                
+                await message.reply(content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
                 
     # COMMANDES =================================================================
