@@ -30,7 +30,7 @@ Tu dois suivre scrupuleusement les instructions de la dernière section ci-aprè
 
 # FONCTIONS
 Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
-Tu peux aussi envoyer des fichiers texte (.txt) en pièce jointe si besoin.
+Tu peux aussi envoyer des fichiers texte (.txt) en pièce jointe si besoin : pas besoin d'y mettre un lien vers le fichier, il est attaché automatiquement.
 
 # INFORMATIONS
 SALON : {data['channel_name']}
