@@ -781,9 +781,9 @@ class GPT(commands.Cog):
                 if completion.tool_used:
                     try:
                         if completion.tool_used in ['get_user_info', 'get_all_user_info']:
-                            await message.add_reaction('<:search:1298804292735733770>')
+                            await message.add_reaction('<:search:1298806107900477440>')
                         elif completion.tool_used == 'set_user_info':
-                            await message.add_reaction('<:save:1298804311706566829>')
+                            await message.add_reaction('<:save:1298806120122548224>')
                     except discord.HTTPException:
                         pass
                 
