@@ -305,7 +305,7 @@ class AssistantToolCallChatMessage(BaseChatMessage):
     """Représente un message d'assistant qui appelle un outil"""
     def __init__(self,
                  tool_calls: list[dict]):
-        super().__init__(role='assistant', content='', name=None, timestamp=None, token_count=None, tool_call_id=None, tool_calls=tool_calls)
+        super().__init__(role='assistant', content="Appel d'outil...", name=None, timestamp=None, token_count=None, tool_call_id=None, tool_calls=tool_calls)
         
     def to_dict(self) -> dict:
         return {
@@ -819,7 +819,7 @@ class GPT(commands.Cog):
                 session.add_message(completion)
                 if not completion.content or not completion.content[0].raw_content:
                     logger.error(f"Empty completion: {completion}")
-                    return await message.reply("**Erreur OpenAI** × L'API n'a pas renvoyé de réponse.\n-# Réessayez dans quelques instants. Si le problème persiste, contactez @acrone ou vérifiez l'état des serveurs de GPT4o-mini.", mention_author=False)
+                    return
                 
                 content = completion.content[0].raw_content
 
