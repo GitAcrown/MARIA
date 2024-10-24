@@ -825,11 +825,11 @@ class GPT(commands.Cog):
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
                 if completion.tool_used == 'get_user_info':
-                    content += "\n-# <:search:1298816145356492842> Recherche de note"
+                    content += "\n-# <:search:1298816145356492842> Consultation de note"
                 elif completion.tool_used == 'get_all_user_info':
                     content += "\n-# <:summary:1298974192733261934> Récapitulatif des notes"
                 elif completion.tool_used == 'get_info_containing_key':
-                    content += "\n-# <:search_key:1298973550530793472> Recherche de notes par clef"
+                    content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Mise à jour de note"
                 
