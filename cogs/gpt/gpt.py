@@ -123,8 +123,8 @@ GPT_TOOLS = [
                         "description": "La clé de la note à modifier (ex. 'age', 'ville', etc.).",
                     },
                     "value": {
-                        "type": "string",
-                        "description": "La nouvelle valeur de la note.",
+                        "type": ["string", "null"],
+                        "description": "La nouvelle valeur de la note. Ne pas renseigner pour supprimer la note.",
                     },
                 },
                 "additionalProperties": False,
@@ -517,11 +517,14 @@ class ChatSession:
                 elif tool_call.function.name == 'set_user_info':
                     arguments = json.loads(tool_call.function.arguments)
                     user_name = arguments['user']
-                    key = arguments['key']  
+                    key = arguments['key']
                     value = arguments['value']
                     user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
                     if not user_id:
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
+                    elif value is None:
+                        self.__cog.delete_user_info(user_id, key)
+                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Note supprimée'}), tool_call.function.name, tool_call.id)
                     else:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
@@ -839,11 +842,11 @@ class GPT(commands.Cog):
                 if completion.tool_used == 'get_user_info':
                     content += "\n-# <:search:1298816145356492842> Consultation de note"
                 elif completion.tool_used == 'get_all_user_info':
-                    content += "\n-# <:summary:1298974192733261934> Récapitulatif des notes"
+                    content += "\n-# <:summary:1299103283574607932> Récapitulatif des notes"
                 elif completion.tool_used == 'get_info_containing_key':
                     content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
                 elif completion.tool_used == 'set_user_info':
-                    content += "\n-# <:write:1298816135722172617> Mise à jour de note"
+                    content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
                 
                 if completion.attachment:
                     return await message.reply(content, mention_author=False, file=completion.attachment, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
