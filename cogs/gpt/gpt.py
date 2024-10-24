@@ -831,7 +831,7 @@ class GPT(commands.Cog):
                 elif completion.tool_used == 'get_info_containing_key':
                     content += "\n-# <:search_key:1298973550530793472> Recherche de notes par clef"
                 elif completion.tool_used == 'set_user_info':
-                    content += "\n-# <:write:1298816135722172617> Note mise à jour"
+                    content += "\n-# <:write:1298816135722172617> Mise à jour de note"
                 
                 await message.reply(content, mention_author=False, suppress_embeds=True, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
