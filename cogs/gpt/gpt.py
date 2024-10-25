@@ -808,7 +808,7 @@ class GPT(commands.Cog):
         
         # On cherche le membre le plus proche en surnom
         nicknames = [member.nick for member in guild.members if member.nick]
-        closest_nickname = fuzzy.extract_one(name, nicknames)
+        closest_nickname = fuzzy.extract_one(name, nicknames, score_cutoff=80)
         if closest_nickname:
             user = discord.utils.find(lambda u: u.nick == closest_nickname[0], guild.members)
             return user if user else None
