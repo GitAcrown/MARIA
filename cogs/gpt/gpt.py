@@ -994,16 +994,20 @@ class GPT(commands.Cog):
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
                 if completion.tools_used:
+                    added_tools_msg = []
                     if 'get_user_info' in completion.tools_used:
-                        content += "\n-# <:search:1298816145356492842> Consultation de note"
-                    elif 'get_all_user_info' in completion.tools_used:
-                        content += "\n-# <:summary:1299103283574607932> Récapitulatif des notes"
-                    elif 'get_info_containing_key' in completion.tools_used:
-                        content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
-                    elif 'set_user_info' in completion.tools_used:
-                        content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
-                    elif 'draw_tarot_cards' in completion.tools_used:
-                        content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot (Event Halloween)"
+                        added_tools_msg.append("<:search:1298816145356492842> Consultation de note")
+                    if 'get_all_user_info' in completion.tools_used:
+                        added_tools_msg.append("<:summary:1299103283574607932> Récapitulatif des notes")
+                    if 'get_info_containing_key' in completion.tools_used:
+                        added_tools_msg.append("<:search_key:1298973550530793472> Consultation de notes par clef")
+                    if 'set_user_info' in completion.tools_used:
+                        added_tools_msg.append("<:write:1298816135722172617> Mise à jour de notes")
+                    if 'draw_tarot_cards' in completion.tools_used:
+                        added_tools_msg.append("<:cards:1299175044173398058> Tirage de carte de tarot")
+                        
+                    if added_tools_msg:
+                        content += f"\n-# {' '.join(added_tools_msg)}"
                 
                 if completion.attachments:
                     return await message.reply(content, mention_author=False, files=completion.attachments, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
