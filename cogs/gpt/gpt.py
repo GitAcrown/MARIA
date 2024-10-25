@@ -840,7 +840,7 @@ class GPT(commands.Cog):
         cards = []
         for _ in range(n):
             card = random.choice(list(self._tarot_cards.keys()))
-            filename = self._tarot_cards[card]
+            filename = self._tarot_cards[card].stem
             reverse = False
             if str(filename).isnumeric(): # Seules les cartes 01 à 21 sont inversables (les arcanes majeurs)
                 reverse = random.choice([True, False])
