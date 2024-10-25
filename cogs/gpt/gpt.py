@@ -337,7 +337,7 @@ class BaseChatMessage:
         self.tool_calls = tool_calls or []
         self.attachments = attachment
         
-        self.tool_used : str | None = None
+        self.tools_used : list[str] | None = None
         
     def __repr__(self):
         return f'<BaseChatMessage role={self.role} content={self.content} name={self.name}>'
@@ -571,8 +571,10 @@ class ChatSession:
         message = completion.choices[0].message
         stop = completion.choices[0].finish_reason
         content = message.content if message.content else None
-        files : list[discord.File] = kwargs.get('files', [])
         usage = completion.usage.total_tokens if completion.usage else 0
+        
+        tools_used : list[str] = kwargs.get('tools_used', [])
+        files : list[discord.File] = kwargs.get('files', [])
         
         if ENABLE_TOOL_USE:
             tool_msg = None
@@ -646,7 +648,9 @@ class ChatSession:
                         
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
-                    return await self.complete(tool_used=tool_call.function.name, files=files)
+                    if tool_call.function.name not in tools_used:
+                        tools_used.append(tool_call.function.name)
+                    return await self.complete(tools_used=tools_used, files=files)
                 else:
                     self.add_messages([calling_msg])
         
@@ -654,7 +658,7 @@ class ChatSession:
             return await self.complete(retry=True)
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
-        answer_msg.tool_used = kwargs.get('tool_used')
+        answer_msg.tools_used = kwargs.get('tools_used')
         answer_msg.attachments = kwargs.get('files', [])[:3] # Maximum 3 fichiers joints
         return answer_msg
 
@@ -841,9 +845,7 @@ class GPT(commands.Cog):
         for _ in range(n):
             card = random.choice(list(self._tarot_cards.keys()))
             filename = self._tarot_cards[card].stem
-            reverse = False
-            if str(filename).isnumeric(): # Seules les cartes 01 à 21 sont inversables (les arcanes majeurs)
-                reverse = random.choice([True, False])
+            reverse = random.choice([True, False])
             img = Image.open(self._tarot_cards[card])
             if reverse:
                 img = img.rotate(180)
@@ -991,16 +993,17 @@ class GPT(commands.Cog):
                 content = completion.content[0].raw_content
 
                 # Ajout d'un emoji si un outil a été utilisé (on a noté le message d'outil juste avant)
-                if completion.tool_used == 'get_user_info':
-                    content += "\n-# <:search:1298816145356492842> Consultation de note"
-                elif completion.tool_used == 'get_all_user_info':
-                    content += "\n-# <:summary:1299103283574607932> Récapitulatif des notes"
-                elif completion.tool_used == 'get_info_containing_key':
-                    content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
-                elif completion.tool_used == 'set_user_info':
-                    content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
-                elif completion.tool_used == 'draw_tarot_cards':
-                    content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot (Event Halloween)"
+                if completion.tools_used:
+                    if 'get_user_info' in completion.tools_used:
+                        content += "\n-# <:search:1298816145356492842> Consultation de note"
+                    elif 'get_all_user_info' in completion.tools_used:
+                        content += "\n-# <:summary:1299103283574607932> Récapitulatif des notes"
+                    elif 'get_info_containing_key' in completion.tools_used:
+                        content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
+                    elif 'set_user_info' in completion.tools_used:
+                        content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
+                    elif 'draw_tarot_cards' in completion.tools_used:
+                        content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot (Event Halloween)"
                 
                 if completion.attachments:
                     return await message.reply(content, mention_author=False, files=completion.attachments, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
