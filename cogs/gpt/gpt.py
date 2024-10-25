@@ -487,17 +487,6 @@ class ChatSession:
     
     # Contrôle de l'historique des messages
     
-    async def resume(self, n: int = 5):
-        """Récupère les X messages précédents du salon pour reconstituer l'historique"""
-        if not isinstance(self.channel, (discord.TextChannel, discord.Thread)):
-            return
-        async for msg in self.channel.history(limit=n):
-            if not msg.author == self.guild.me:
-                elements = await self.__cog._extract_content_from_message(msg)
-                self.messages.append(UserChatMessage(elements, msg.author))
-            else:
-                self.messages.append(AssistantChatMessage(msg.content))
-    
     def add_message(self, message: BaseChatMessage):
         self.messages.append(message)
     
@@ -594,30 +583,30 @@ class ChatSession:
                     }
                 }
                 calling_msg = AssistantToolCallChatMessage([call_data])
-                
+                 
                 if tool_call.function.name == 'get_user_info':
                     arguments = json.loads(tool_call.function.arguments)
                     user_name = arguments['user']
                     key = arguments['key']
-                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
-                    if user_id:
-                        notes = self.__cog.get_user_info(user_id, key)
+                    user = self.__cog.fetch_user_from_name(self.guild, user_name)
+                    if user:
+                        notes = self.__cog.get_user_info(user.id, key)
                         if not notes:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'key': key, 'value': 'Aucune note trouvée'}), tool_call.function.name, tool_call.id)
                         else:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': notes}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'key': key, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_all_user_info':
                     arguments = json.loads(tool_call.function.arguments)
                     user_name = arguments['user']
-                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
-                    if not user_id:
+                    user = self.__cog.fetch_user_from_name(self.guild, user_name)
+                    if not user:
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
                     else:
-                        notes = self.__cog.get_all_user_info(user_id)
+                        notes = self.__cog.get_all_user_info(user.id)
                         if not notes:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': 'Aucune note trouvée sur cet utilisateur'}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'value': 'Aucune note trouvée sur cet utilisateur'}), tool_call.function.name, tool_call.id)
                         else:
-                            tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'value': notes}), tool_call.function.name, tool_call.id)
+                            tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'value': notes}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'get_info_containing_key':
                     arguments = json.loads(tool_call.function.arguments)
                     key = arguments['key_search']
@@ -631,15 +620,15 @@ class ChatSession:
                     user_name = arguments['user']
                     key = arguments['key']
                     value = arguments['value']
-                    user_id = self.__cog.fetch_user_id_from_name(self.guild, user_name)
-                    if not user_id:
+                    user = self.__cog.fetch_user_from_name(self.guild, user_name)
+                    if not user:
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Utilisateur non existant'}), tool_call.function.name, tool_call.id)
                     elif value is None:
-                        self.__cog.delete_user_info(user_id, key)
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': 'Note supprimée'}), tool_call.function.name, tool_call.id)
+                        self.__cog.delete_user_info(user.id, key)
+                        tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'key': key, 'value': 'Note supprimée'}), tool_call.function.name, tool_call.id)
                     else:
-                        self.__cog.set_user_info(user_id, key, value)
-                        tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
+                        self.__cog.set_user_info(user.id, key, value)
+                        tool_msg = ToolChatMessage(json.dumps({'corrected_user': user.name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
                 elif tool_call.function.name == 'draw_tarot_cards':
                     arguments = json.loads(tool_call.function.arguments)
                     n = arguments['n'] if arguments.get('n') else 1
@@ -741,8 +730,6 @@ class GPT(commands.Cog):
                               system_prompt=config['system_prompt'],
                               temperature=config['temperature'])
         self._sessions[channel.id] = session
-        if isinstance(channel, (discord.TextChannel, discord.Thread)):
-            await session.resume()
         return session
     
     def _clear_session(self, channel: discord.abc.GuildChannel):
@@ -800,9 +787,32 @@ class GPT(commands.Cog):
     
     # Notes de l'assistant ------------------------------------------------------
     
-    def fetch_user_id_from_name(self, guild: discord.Guild, name: str) -> int | None:
+    def fetch_user_from_name(self, guild: discord.Guild, name: str) -> discord.Member | None:
         user = discord.utils.find(lambda u: u.name == name.lower(), guild.members)
-        return user.id if user else None
+        if user:
+            return user if user else None
+        
+        # On cherche le membre le plus proche en nom
+        members = [member.name for member in guild.members]
+        closest_member = fuzzy.extract_one(name, members)
+        if closest_member:
+            user = discord.utils.find(lambda u: u.name == closest_member[0], guild.members)
+            return user if user else None
+        
+        # On cherche le membre le plus proche en surnom
+        nicknames = [member.nick for member in guild.members if member.nick]
+        closest_nickname = fuzzy.extract_one(name, nicknames)
+        if closest_nickname:
+            user = discord.utils.find(lambda u: u.nick == closest_nickname[0], guild.members)
+            return user if user else None
+        
+        # On cherche l'ID de l'utilisateur
+        try:
+            user_id = int(name)
+            user = discord.utils.find(lambda u: u.id == user_id, guild.members)
+            return user if user else None
+        except ValueError:
+            return None
     
     def get_user_info(self, user: discord.User | discord.Member | int, key: str) -> str | None:
         """Renvoie une note associée à un utilisateur."""
