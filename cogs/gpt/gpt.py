@@ -589,6 +589,7 @@ class ChatSession:
                     user_name = arguments['user']
                     key = arguments['key']
                     user = self.__cog.fetch_user_from_name(self.guild, user_name)
+                    print(user)
                     if user:
                         notes = self.__cog.get_user_info(user.id, key)
                         if not notes:
@@ -792,6 +793,12 @@ class GPT(commands.Cog):
         if user:
             return user if user else None
         
+        # On tente d'extraire un ID
+        poss_id = re.search(r'\d{17,19}', name)
+        if poss_id:
+            user = discord.utils.find(lambda u: u.id == int(poss_id.group(0)), guild.members)
+            return user if user else None
+        
         # On cherche le membre le plus proche en nom
         members = [member.name for member in guild.members]
         closest_member = fuzzy.extract_one(name, members)
@@ -805,14 +812,6 @@ class GPT(commands.Cog):
         if closest_nickname:
             user = discord.utils.find(lambda u: u.nick == closest_nickname[0], guild.members)
             return user if user else None
-        
-        # On cherche l'ID de l'utilisateur
-        try:
-            user_id = int(name)
-            user = discord.utils.find(lambda u: u.id == user_id, guild.members)
-            return user if user else None
-        except ValueError:
-            return None
     
     def get_user_info(self, user: discord.User | discord.Member | int, key: str) -> str | None:
         """Renvoie une note associée à un utilisateur."""
