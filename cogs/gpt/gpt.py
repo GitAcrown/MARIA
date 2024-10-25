@@ -27,11 +27,11 @@ from common.utils import fuzzy, pretty
 logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
 FULL_SYSTEM_PROMPT = lambda data: f"""# META
-La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages.
+La discussion se déroule sur un salon textuel Discord dont tu disposes de l'historique des messages, tu réponds à ceux qui te sont adressés.
 Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne met pas ton nom devant tes réponses.
-Tu dois suivre scrupuleusement les instructions de la dernière section ci-après.
+Suis scrupuleusement les instructions de la section # INSTRUCTIONS.
 
-Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
+Tu peux gérer des notes sur les utilisateurs. Prend-les en compte dans tes réponses si t'as besoin d'informations sur un utilisateur.
 Tu peux tirer des cartes de tarot si on te le demande.
 
 # INFORMATIONS
