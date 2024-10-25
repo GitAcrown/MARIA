@@ -144,17 +144,22 @@ GPT_TOOLS = [
             "strict": True,
             "parameters": {
                 "type": "object",
-                "required": ["n"],
+                "required": ["n", "arcane"],
                 "properties": {
                     "n": {
                         "type": ["integer", "null"],
                         "description": "Nombre de cartes à tirer, maximum 3 et par défaut 1.",
-                    }
+                    },
+                    "arcane": {
+                        "type": ["string", "null"],
+                        "enum": ["arcane_majeur", "arcane_mineur"],
+                        "description": "Arcane(s) à tirer. Ne pas renseigner pour un mélange des arcanes (par défaut).",
+                    },
                 },
                 "additionalProperties": False,
             },
         },
-    },
+    }
 ]
 
 TAROT_CARDS = {
@@ -638,10 +643,11 @@ class ChatSession:
                 elif tool_call.function.name == 'draw_tarot_cards':
                     arguments = json.loads(tool_call.function.arguments)
                     n = arguments['n'] if arguments.get('n') else 1
+                    arcanes = arguments['arcane'] if arguments.get('arcane') else 'melange'
                     if n > 3:
                         tool_msg = ToolChatMessage('Le nombre maximum de cartes à tirer est de 3.', tool_call.function.name, tool_call.id)
                     else:
-                        cards = self.__cog.draw_tarot_cards(n)
+                        cards = self.__cog.draw_tarot_cards(n, arcanes)
                         names = ', '.join([c['name'] for c in cards])
                         tool_msg = ToolChatMessage(f"Cartes tirées: {names}", tool_call.function.name, tool_call.id)
                         files.extend([card['image'] for card in cards])
@@ -839,22 +845,33 @@ class GPT(commands.Cog):
         
     # EVENT - Lecture de tarot --------------------------------------------------
     
-    def draw_tarot_cards(self, n: int = 1) -> list[dict]:
+    def draw_tarot_cards(self, n: int = 1, arcanes: Literal['majeur', 'mineur', 'melange'] = 'melange') -> list[dict]:
         """Renvoie une liste de cartes de tarot."""
         cards = []
+        majeurs = [TAROT_CARDS[c] for c in TAROT_CARDS if c[:2].isnumeric()]
+        mineurs = [TAROT_CARDS[c] for c in TAROT_CARDS if TAROT_CARDS[c] not in majeurs]
+        all_cards = majeurs + mineurs
+        
         for _ in range(n):
-            card = random.choice(list(self._tarot_cards.keys()))
-            filename = self._tarot_cards[card].stem
+            if arcanes == 'majeur':
+                card_name = random.choice(majeurs)
+                card = self._tarot_cards[card_name]
+            elif arcanes == 'mineur':
+                card_name = random.choice(mineurs)
+                card = self._tarot_cards[card_name]
+            else:
+                card_name = random.choice(all_cards)
+                card = self._tarot_cards[card_name]
+
             reverse = random.choice([True, False])
-            img = Image.open(self._tarot_cards[card])
+            img = Image.open(card)
             if reverse:
                 img = img.rotate(180)
-                filename = f'{filename}_reverse'
-                card = f"{card} (inversée)"
+                card_name = f"{card_name} (inversée)"
             img_buffer = io.BytesIO()
             img.save(img_buffer, format='JPEG')
             img_buffer.seek(0)
-            cards.append({'name': card, 'image': discord.File(img_buffer, filename=f'{filename}.jpeg')})
+            cards.append({'name': card_name, 'image': discord.File(img_buffer, filename=f'{datetime.now().timestamp()}.jpeg')})
         return cards
     
     # Audio --------------------------------------------------------------------
