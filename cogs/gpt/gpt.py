@@ -1000,7 +1000,7 @@ class GPT(commands.Cog):
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
                 elif completion.tool_used == 'draw_tarot_cards':
-                    content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot"
+                    content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot (Event Halloween)"
                 
                 if completion.attachments:
                     return await message.reply(content, mention_author=False, files=completion.attachments, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
