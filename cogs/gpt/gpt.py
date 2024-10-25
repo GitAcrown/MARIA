@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import random
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,6 +18,9 @@ from discord.ext import commands
 from moviepy.editor import VideoFileClip
 from openai import AsyncOpenAI
 
+# Pour retourner les cartes de tarot
+from PIL import Image, ImageDraw
+
 from common import dataio
 from common.utils import fuzzy, pretty
 
@@ -28,6 +32,7 @@ Les messages sont précédés du nom de l'utilisateur qui les a envoyés. Tu ne 
 Tu dois suivre scrupuleusement les instructions de la dernière section ci-après.
 
 Tu disposes de fonctions pour gérer des notes sur les utilisateurs, utilise-les dès que t'as besoin d'informations sur un utilisateur.
+Tu peux tirer des cartes de tarot si on te le demande.
 
 # INFORMATIONS
 SALON : {data['channel_name']}
@@ -130,8 +135,108 @@ GPT_TOOLS = [
                 "additionalProperties": False,
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "draw_tarot_cards",
+            "description": "Tire une ou plusieurs cartes de tarot.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "required": ["n"],
+                "properties": {
+                    "n": {
+                        "type": ["integer", "null"],
+                        "description": "Nombre de cartes à tirer, maximum 3 et par défaut 1.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
+
+TAROT_CARDS = {
+    "00": "Le Mat",
+    "01": "Le Bateleur",
+    "02": "La Papesse",
+    "03": "L'Impératrice",
+    "04": "L'Empereur",
+    "05": "Le Pape",
+    "06": "L'Amoureux",
+    "07": "Le Chariot",
+    "08": "La Justice",
+    "09": "L'Ermite",
+    "10": "La Roue de Fortune",
+    "11": "La Force",
+    "12": "Le Pendu",
+    "13": "La Mort",
+    "14": "La Tempérance",
+    "15": "Le Diable",
+    "16": "La Tour",
+    "17": "L'Étoile",
+    "18": "La Lune",
+    "19": "Le Soleil",
+    "20": "Le Jugement",
+    "21": "Le Monde",
+    "cu01": "As de Coupe",
+    "cu02": "Deux de Coupe",
+    "cu03": "Trois de Coupe",
+    "cu04": "Quatre de Coupe",
+    "cu05": "Cinq de Coupe",
+    "cu06": "Six de Coupe",
+    "cu07": "Sept de Coupe",
+    "cu08": "Huit de Coupe",
+    "cu09": "Neuf de Coupe",
+    "cu10": "Dix de Coupe",
+    "cuki": "Roi de Coupe",
+    "cukn": "Chevalier de Coupe",
+    "cupa": "Valet de Coupe",
+    "cuqu": "Reine de Coupe",
+    "pe01": "As de Denier",
+    "pe02": "Deux de Denier",
+    "pe03": "Trois de Denier",
+    "pe04": "Quatre de Denier",
+    "pe05": "Cinq de Denier",
+    "pe06": "Six de Denier",
+    "pe07": "Sept de Denier",
+    "pe08": "Huit de Denier",
+    "pe09": "Neuf de Denier",
+    "pe10": "Dix de Denier",
+    "peki": "Roi de Denier",
+    "pekn": "Chevalier de Denier",
+    "pepa": "Valet de Denier",
+    "pequ": "Reine de Denier",
+    "sw01": "As d'Épée",
+    "sw02": "Deux d'Épée",
+    "sw03": "Trois d'Épée",
+    "sw04": "Quatre d'Épée",
+    "sw05": "Cinq d'Épée",
+    "sw06": "Six d'Épée",
+    "sw07": "Sept d'Épée",
+    "sw08": "Huit d'Épée",
+    "sw09": "Neuf d'Épée",
+    "sw10": "Dix d'Épée",
+    "swki": "Roi d'Épée",
+    "swkn": "Chevalier d'Épée",
+    "swpa": "Valet d'Épée",
+    "swqu": "Reine d'Épée",
+    "wa01": "As de Bâton",
+    "wa02": "Deux de Bâton",
+    "wa03": "Trois de Bâton",
+    "wa04": "Quatre de Bâton",
+    "wa05": "Cinq de Bâton",
+    "wa06": "Six de Bâton",
+    "wa07": "Sept de Bâton",
+    "wa08": "Huit de Bâton",
+    "wa09": "Neuf de Bâton",
+    "wa10": "Dix de Bâton",
+    "waki": "Roi de Bâton",
+    "wakn": "Chevalier de Bâton",
+    "wapa": "Valet de Bâton",
+    "waqu": "Reine de Bâton",
+}
 
 def clean_name(name: str) -> str:
     name = ''.join([c for c in unidecode.unidecode(name) if c.isalnum() or c.isspace()]).rstrip()
@@ -160,7 +265,7 @@ class SystemPromptModal(discord.ui.Modal, title="Modifier les instructions syst�
         
     async def on_error(self, interaction: Interaction, error: Exception) -> None:
         return await interaction.response.send_message(f"**Erreur** × {error}", ephemeral=True)
-    
+
 class ConfirmView(discord.ui.View):
     """Permet de confirmer une action."""
     def __init__(self, author: discord.Member | discord.User):
@@ -220,7 +325,7 @@ class BaseChatMessage:
                  token_count: int | None = None,
                  tool_call_id: str | None = None,
                  tool_calls: list[dict] | None = None,
-                 attachment: discord.File | None = None):
+                 attachment: list[discord.File] | None = None):
         self.role = role
         
         self.__content = content
@@ -230,7 +335,7 @@ class BaseChatMessage:
         
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls or []
-        self.attachment = attachment
+        self.attachments = attachment
         
         self.tool_used : str | None = None
         
@@ -302,8 +407,8 @@ class AssistantChatMessage(BaseChatMessage):
     def __init__(self, 
                  content: str | list[MessageContentElement] | None,
                  token_count: int | None = None,
-                 attachment: discord.File | None = None): # Le nb de tokens est renvoyé par l'API donc on peut le passer en paramètre
-        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None, attachment=attachment)
+                 attachments: list[discord.File] | None = None):
+        super().__init__(role='assistant', content=content, name=None, timestamp=None, token_count=token_count, tool_call_id=None, attachment=attachments)
 
 class AssistantToolCallChatMessage(BaseChatMessage):
     """Représente un message d'assistant qui appelle un outil"""
@@ -316,7 +421,7 @@ class AssistantToolCallChatMessage(BaseChatMessage):
             'role': self.role,
             'tool_calls': self.tool_calls
         }
-    
+
 class ToolChatMessage(BaseChatMessage):
     """Repésente un message d'outil, qui est une réponse à un appel d'outil"""
     def __init__(self,
@@ -466,7 +571,7 @@ class ChatSession:
         message = completion.choices[0].message
         stop = completion.choices[0].finish_reason
         content = message.content if message.content else None
-        file = None
+        files : list[discord.File] = kwargs.get('files', [])
         usage = completion.usage.total_tokens if completion.usage else 0
         
         if ENABLE_TOOL_USE:
@@ -528,10 +633,20 @@ class ChatSession:
                     else:
                         self.__cog.set_user_info(user_id, key, value)
                         tool_msg = ToolChatMessage(json.dumps({'user': user_name, 'key': key, 'value': value}), tool_call.function.name, tool_call.id)
-                
+                elif tool_call.function.name == 'draw_tarot_cards':
+                    arguments = json.loads(tool_call.function.arguments)
+                    n = arguments['n'] if arguments.get('n') else 1
+                    if n > 3:
+                        tool_msg = ToolChatMessage('Le nombre maximum de cartes à tirer est de 3.', tool_call.function.name, tool_call.id)
+                    else:
+                        cards = self.__cog.draw_tarot_cards(n)
+                        names = ', '.join([c['name'] for c in cards])
+                        tool_msg = ToolChatMessage(f"Cartes tirées: {names}", tool_call.function.name, tool_call.id)
+                        files.extend([card['image'] for card in cards])
+                        
                 if tool_msg:
                     self.add_messages([calling_msg, tool_msg])
-                    return await self.complete(tool_used=tool_call.function.name, file=file)
+                    return await self.complete(tool_used=tool_call.function.name, files=files)
                 else:
                     self.add_messages([calling_msg])
         
@@ -540,7 +655,7 @@ class ChatSession:
         
         answer_msg = AssistantChatMessage(content, token_count=usage)
         answer_msg.tool_used = kwargs.get('tool_used')
-        answer_msg.attachment = kwargs.get('file')
+        answer_msg.attachments = kwargs.get('files', [])[:3] # Maximum 3 fichiers joints
         return answer_msg
 
 
@@ -580,10 +695,22 @@ class GPT(commands.Cog):
         self.bot.tree.add_command(self.create_audio_transcription)
         
         self._sessions : dict[int, ChatSession] = {}
+        self._tarot_cards = self.__load_assets()
         
     async def cog_unload(self):
         self.data.close_all()
         await self.client.close()
+        
+    def __load_assets(self) -> dict[str, Path]:
+        folder = self.data.assets_path / 'tarot'
+        cards = {}
+        for filepath in folder.iterdir():
+            if filepath.suffix == '.jpeg':
+                file_name = filepath.stem
+                card_name = TAROT_CARDS.get(file_name)
+                if card_name:
+                    cards[card_name] = filepath
+        return cards
         
     # Session de chat -----------------------------------------------------------
         
@@ -705,6 +832,28 @@ class GPT(commands.Cog):
         """Supprime toutes les notes associées à un utilisateur."""
         user_id = user.id if isinstance(user, (discord.User, discord.Member)) else user
         self.data.get('global').execute('DELETE FROM memory WHERE user_id = ?', user_id)
+        
+    # EVENT - Lecture de tarot --------------------------------------------------
+    
+    def draw_tarot_cards(self, n: int = 1) -> list[dict]:
+        """Renvoie une liste de cartes de tarot."""
+        cards = []
+        for _ in range(n):
+            card = random.choice(list(self._tarot_cards.keys()))
+            filename = self._tarot_cards[card]
+            reverse = False
+            if str(filename).isnumeric(): # Seules les cartes 01 à 21 sont inversables (les arcanes majeurs)
+                reverse = random.choice([True, False])
+            img = Image.open(self._tarot_cards[card])
+            if reverse:
+                img = img.rotate(180)
+                filename = f'{filename}_reverse'
+                card = f"{card} (inversée)"
+            img_buffer = io.BytesIO()
+            img.save(img_buffer, format='JPEG')
+            img_buffer.seek(0)
+            cards.append({'name': card, 'image': discord.File(img_buffer, filename=f'{filename}.jpeg')})
+        return cards
     
     # Audio --------------------------------------------------------------------
     
@@ -850,9 +999,11 @@ class GPT(commands.Cog):
                     content += "\n-# <:search_key:1298973550530793472> Consultation de notes par clef"
                 elif completion.tool_used == 'set_user_info':
                     content += "\n-# <:write:1298816135722172617> Mise à jour de notes"
+                elif completion.tool_used == 'draw_tarot_cards':
+                    content += "\n-# <:cards:1299175044173398058> Tirage de carte de tarot"
                 
-                if completion.attachment:
-                    return await message.reply(content, mention_author=False, file=completion.attachment, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
+                if completion.attachments:
+                    return await message.reply(content, mention_author=False, files=completion.attachments, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 await message.reply(content, mention_author=False, allowed_mentions=discord.AllowedMentions(users=False, roles=False, everyone=False, replied_user=True))
                 
                 
