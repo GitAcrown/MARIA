@@ -878,23 +878,32 @@ class Assistant(commands.Cog):
         """Retourne les informations d'un utilisateur."""
         self.delete_expired_memory()
         r = self.data.get('global').fetchall('SELECT * FROM assistant_memory WHERE user_id = ?', user.id)
+        # On met à jour la date d'accès
+        if r:
+            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE user_id = ?', user.id)
         return {row['key']: row['value'] for row in r}
     
     def get_user_info_by_key(self, user: discord.Member | discord.User, key: str) -> str | None:
         """Retourne une information spécifique d'un utilisateur."""
         self.delete_expired_memory()
-        r = self.data.get('global').fetchone('SELECT value FROM assistant_memory WHERE user_id = ? AND key = ?', user.id, key)
-        if not r:
-            keys = self.data.get('global').fetchall('SELECT key FROM assistant_memory WHERE user_id = ?', user.id)
+        keys = self.data.get('global').fetchall('SELECT key FROM assistant_memory WHERE user_id = ?', user.id)
+        if key not in [row['key'] for row in keys]:
             closest_key = fuzzy.extract_one(key, [row['key'] for row in keys])
             if closest_key:
-                r = self.data.get('global').fetchone('SELECT value FROM assistant_memory WHERE user_id = ? AND key = ?', user.id, closest_key[0])
+                key = closest_key[0]
+        r = self.data.get('global').fetchone('SELECT value FROM assistant_memory WHERE user_id = ? AND key = ?', user.id, key)
+        # On met à jour la date d'accès
+        if r:
+            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND key = ?', user.id, key)
         return r['value'] if r else None
     
     def find_users_by_key(self, guild: discord.Guild, key: str) -> list[discord.Member]:
         """Retourne les utilisateurs ayant une information spécifique."""
         self.delete_expired_memory()
         r = self.data.get('global').fetchall('SELECT user_id FROM assistant_memory WHERE key = ?', key)
+        # On met à jour la date d'accès
+        if r:
+            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE key = ?', key)
         guild_members = {member.id: member for member in guild.members}
         return [guild_members[row['user_id']] for row in r if row['user_id'] in guild_members]
     
