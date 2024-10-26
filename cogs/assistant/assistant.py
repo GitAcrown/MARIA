@@ -36,7 +36,6 @@ Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-
 
 [INFORMATIONS]
 - Serveur : {d['guild_name']}
-- Salon : {d['channel_name']}
 - Date/heure : {d['current_time']}
 - Connaissances jusqu'au : Octobre 2023
 
@@ -574,15 +573,14 @@ class ChatSession:
     """Représente une session de conversation."""
     def __init__(self,
                  cog: 'Assistant',
-                 channel: discord.TextChannel | discord.Thread,
+                 guild: discord.Guild,
                  system_prompt: str,
                  *,
                  temperature: float = 1.0,
                  max_completion_tokens: int = MAX_COMPLETION_TOKENS,
                  context_window: int = CONTEXT_WINDOW) -> None:
         self.__cog = cog
-        self.channel = channel
-        self.guild = channel.guild
+        self.guild = guild
         
         self._initial_system_prompt = system_prompt
         self.temperature = temperature
@@ -592,7 +590,7 @@ class ChatSession:
         self._interactions : dict[str, ChatInteraction] = {} # Historique des messages par groupes d'interactions
     
     def __repr__(self) -> str:
-        return f'<ChatSession channel={self.channel}>'
+        return f'<ChatSession guild={self.guild.name} interactions={len(self._interactions)}>'
     
     # Propriétés
     
@@ -601,7 +599,6 @@ class ChatSession:
         data = {
             'assistant_name': self.guild.me.name,
             'guild_name': self.guild.name,
-            'channel_name': self.channel.name,
             'current_time': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
             'system_prompt': self._initial_system_prompt
         }
@@ -834,12 +831,12 @@ class Assistant(commands.Cog):
         
     # Gestions des sessions ---------------------------------------------------
     
-    def get_session(self, channel: discord.TextChannel | discord.Thread) -> ChatSession:
-        system_prompt = self.get_guild_config(channel.guild).get('system_prompt', DEFAULT_SYSTEM_PROMPT)
-        session = self._sessions.get(channel.id)
+    def get_session(self, guild: discord.Guild) -> ChatSession:
+        system_prompt = self.get_guild_config(guild).get('system_prompt', DEFAULT_SYSTEM_PROMPT)
+        session = self._sessions.get(guild.id)
         if not session:
-            session = ChatSession(self, channel, system_prompt)
-            self._sessions[channel.id] = session
+            session = ChatSession(self, guild, system_prompt)
+            self._sessions[guild.id] = session
         return session
     
     # Outils -------------------------------------------------------------------
@@ -1067,10 +1064,10 @@ class Assistant(commands.Cog):
         if not message.channel.permissions_for(message.guild.me).send_messages:
             return
         
-        session = self.get_session(message.channel)
+        guild = message.guild
+        session = self.get_session(guild)
         if not session:
             return
-        guild = message.guild
         
         if guild.me.mentioned_in(message):
             usermsg = await UserCtxMessage.from_message(message)
@@ -1101,10 +1098,10 @@ class Assistant(commands.Cog):
     @app_commands.guild_only()
     async def system_prompt_command(self, interaction: Interaction):
         """Consulter ou modifier les instructions système de l'assistant."""
-        if not isinstance(interaction.guild, discord.Guild) or not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+        if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
-        session = self.get_session(interaction.channel)
+        session = self.get_session(interaction.guild)
         if not session:
             return await interaction.response.send_message("**Erreur** × Impossible de démarrer la session de conversation.", ephemeral=True)
         
@@ -1129,15 +1126,15 @@ class Assistant(commands.Cog):
         """Modifier le degré de créativité de l'assistant.
 
         :param temp: Température de génération, entre 0.0 et 2.0"""
-        if not isinstance(interaction.guild, discord.Guild) or not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+        if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
-        session = self.get_session(interaction.channel)
+        session = self.get_session(interaction.guild)
         if not session:
             return await interaction.response.send_message("**Erreur interne** × Impossible de récupérer la session de chat.", ephemeral=True)
         
         # On met à jour la température
-        self.data.get(interaction.channel.guild).execute('UPDATE chatconfig SET temperature = ? WHERE channel_id = ?', temp, interaction.channel.id)
+        self.set_guild_config(interaction.guild, temperature=temp)
         session.temperature = temp
         if temp >= 1.4:
             return await interaction.response.send_message(f"**Température mise à jour** · La température de génération est désormais de ***{temp}***.\n-# Attention, une température élevée peut entraîner des réponses incohérentes.", ephemeral=True)
@@ -1147,13 +1144,13 @@ class Assistant(commands.Cog):
     @app_commands.guild_only()
     async def cmd_info(self, interaction: Interaction):
         """Afficher les informations sur l'assistant sur la session en cours."""
-        if not isinstance(interaction.guild, discord.Guild) or not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+        if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
         embed = discord.Embed(title="Informations sur l'assitant", color=discord.Color(0x000001))
-        embed.set_thumbnail(url=interaction.channel.guild.me.display_avatar.url)
+        embed.set_thumbnail(url=interaction.guild.me.display_avatar.url)
         embed.set_footer(text="Implémentation de GPT4o-mini et Whisper-1 (par OpenAI)", icon_url="https://static-00.iconduck.com/assets.00/openai-icon-2021x2048-4rpe5x7n.png")
-        session = self.get_session(interaction.channel)
+        session = self.get_session(interaction.guild)
         if not session:
             return await interaction.response.send_message("**Erreur interne** × Impossible de récupérer la session de chat.", ephemeral=True)
         
@@ -1172,10 +1169,10 @@ class Assistant(commands.Cog):
     @app_commands.default_permissions(manage_messages=True)
     async def cmd_resethistory(self, interaction: Interaction):
         """Réinitialiser les messages en mémoire de l'assistant."""
-        if not isinstance(interaction.guild, discord.Guild) or not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+        if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
-        session = self.get_session(interaction.channel)
+        session = self.get_session(interaction.guild)
         if not session:
             return await interaction.response.send_message("**Erreur interne** × Impossible de récupérer la session de chat.", ephemeral=True)
         
