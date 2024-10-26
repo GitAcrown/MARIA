@@ -466,15 +466,19 @@ class UserCtxMessage(ContextMessage):
                 ref_author_name = ref_message.author.name if not ref_message.author.bot else f'{ref_message.author.name}[bot]'
                 msg_content = f'[Début de citation] {ref_author_name}:{ref_message.clean_content} [Fin de citation]\n{msg_content}'
             content.append(MessageElement('text', msg_content))
-            
-        for embed in message.embeds:
-            if embed.description:
-                content.append(MessageElement('text', f'[Embed] {embed.description}'))
                 
         image_urls = []
         for msg in [message, ref_message]:
             if not isinstance(msg, discord.Message):
                 continue
+            
+            for embed in msg.embeds:
+                if embed.description:
+                    if msg == message:
+                        content.append(MessageElement('text', f'[Embed] {embed.description}'))
+                    else:
+                        content.append(MessageElement('text', f'[Début de citation] [Embed] {embed.description} [Fin de citation]'))
+            
             for attachment in msg.attachments:
                 if attachment.content_type and attachment.content_type.startswith('image'):
                     image_urls.append(attachment.url)
