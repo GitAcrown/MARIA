@@ -1084,7 +1084,7 @@ class Assistant(commands.Cog):
                     return await message.reply(f"**Erreur** × Aucune réponse n'a pu être générée pour votre message.", mention_author=False)
                 
                 files = completion.files
-                content = completion._raw_content
+                content = completion._raw_content[:1900]
                 markers = self.get_tool_markers(completion.tools_used)
                 if markers:
                     content += f"\n-# {markers}"
