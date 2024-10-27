@@ -936,8 +936,7 @@ class Assistant(commands.Cog):
     def get_tool_markers(self, used_tools: list[str]) -> str:
         """Renvoie les marqueurs d'outils utilisés."""
         markers = {
-            'get_user_info': "<:summary:1299103283574607932> Résumé de notes",
-            'get_user_info_by_key': "<:search:1298816145356492842> Consultation de note",
+            'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
             'set_user_info': "<:write:1298816135722172617> Édition de note",
             'draw_tarot_cards': "<:cards:1299175044173398058> Tirage de tarot (Event Halloween)"
