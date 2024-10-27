@@ -1116,7 +1116,7 @@ class Assistant(commands.Cog):
         # On met à jour la température
         self.set_guild_config(interaction.guild, temperature=temp)
         session.temperature = temp
-        if temp >= 1.4:
+        if temp > 1.4:
             return await interaction.response.send_message(f"**Température mise à jour** · La température de génération est désormais de ***{temp}***.\n-# Attention, une température élevée peut entraîner des réponses incohérentes.", ephemeral=True)
         await interaction.response.send_message(f"**Température mise à jour** · La température de génération est désormais de {temp}.", ephemeral=True)
     
