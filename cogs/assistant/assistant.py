@@ -1127,7 +1127,7 @@ class Assistant(commands.Cog):
         if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
-        embed = discord.Embed(title="Informations sur l'assitant", color=discord.Color(0x000001))
+        embed = discord.Embed(title="Informations sur l'assistant", color=discord.Color(0x000001))
         embed.set_thumbnail(url=interaction.guild.me.display_avatar.url)
         embed.set_footer(text="Implémentation de GPT4o-mini et Whisper-1 (par OpenAI)", icon_url="https://static-00.iconduck.com/assets.00/openai-icon-2021x2048-4rpe5x7n.png")
         session = self.get_session(interaction.guild)
