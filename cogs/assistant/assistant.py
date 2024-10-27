@@ -483,7 +483,7 @@ class UserCtxMessage(ContextMessage):
 class ChatInteraction:
     """Représente un groupe de messages (questions, réponses et outils) dans une conversation."""
     def __init__(self, messages: list[ContextMessage]) -> None:
-        self._messages = {n: m for n, m in enumerate(messages)}
+        self._messages = messages
         
     def __repr__(self) -> str:
         return f'<ChatInteraction messages={len(self.messages)}>'
@@ -518,7 +518,7 @@ class ChatInteraction:
     
     @property
     def messages(self) -> list[ContextMessage]:
-        return list(self._messages.values()) # Conserve l'ordre d'ajout
+        return self._messages
     
     @property
     def last_user_message(self) -> UserCtxMessage | None:
@@ -540,17 +540,10 @@ class ChatInteraction:
         return [m for m in self.messages if m.role == role]
     
     def add_messages(self, *messages: ContextMessage) -> None:
-        for message in messages:
-            self._messages[len(self._messages)] = message
-        
-    def insert_message(self, message: ContextMessage, index: int) -> None:
-        self._messages[index] = message
+        self._messages.extend(messages)
         
     def remove_message(self, message: ContextMessage) -> None:
-        for n, m in self._messages.items():
-            if m == message:
-                self._messages.pop(n)
-                break
+        self._messages.remove(message)
         
     
 class ChatSession:
@@ -615,7 +608,7 @@ class ChatSession:
         messages = []
         self.remove_expired_context()
         tokens = self.system_prompt.token_count
-        interactions = sorted(self._interactions.values(), key=lambda i: i.messages[-1].timestamp, reverse=True)
+        interactions = sorted(self._interactions.values(), key=lambda i: i.messages[-1].timestamp)
         for interaction in interactions:
             if not interaction.completed:
                 continue # On ne garde que les interactions complètes
