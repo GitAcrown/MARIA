@@ -59,34 +59,18 @@ ENABLE_TOOLS = True # Activation des outils de l'assistant
 
 # Définition des outils de l'assistant
 GPT_TOOLS = [
-    { # Récupération globale des informations d'un utilisateur
+    { # Récupération des informations d'un utilisateur
         'type': 'function',
         'function': {
             'name': 'get_user_info',
-            'description': "Récupère les informations d'un utilisateur (sous forme de dictionnaire clé-valeur).",
-            'strict': True,
-            'parameters': {
-                'type': 'object',
-                'required': ['user'],
-                'properties': {
-                    'user': {'type': 'string', 'description': "Nom de l'utilisateur à rechercher."}
-                },
-                'additionalProperties': False
-            }
-        }
-    },
-    { # Récupération par clé des informations d'un utilisateur
-        'type': 'function',
-        'function': {
-            'name': 'get_user_info_by_key',
-            'description': "Récupère une information spécifique d'un utilisateur.",
+            'description': "Récupère une ou toutes les notes sur l'utilisateur (sous forme de dictionnaire clé-valeur).",
             'strict': True,
             'parameters': {
                 'type': 'object',
                 'required': ['user', 'key'],
                 'properties': {
                     'user': {'type': 'string', 'description': "Nom de l'utilisateur à rechercher."},
-                    'key': {'type': 'string', 'description': "Clé de l'information à récupérer (ex. 'age'). Renvoie la clef la plus proche si aucune correspondance exacte."}
+                    'key': {'type': ['string', 'null'], 'description': "Clé de l'information à récupérer (ex. 'age', 'ville' etc.). Ne pas renseigner pour obtenir toutes les informations."}
                 },
                 'additionalProperties': False
             }
@@ -96,7 +80,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'find_users_by_key',
-            'description': "Recherche des utilisateurs ayant une information spécifique.",
+            'description': "Recherche des utilisateurs ayant une clé de note spécifique. Utile pour les recherches par âge, localisation, etc.",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -112,7 +96,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'set_user_info',
-            'description': "Met à jour une clé-valeur des informations d'un utilisateur.",
+            'description': "Met à jour une note d'un utilisateur.",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -716,24 +700,19 @@ class ChatSession:
         
         if call.function_name == 'get_user_info':
             username = call.function_arguments['user']
-            user = self.__cog.fetch_user_from_name(self.guild, username)
-            if user:
-                info = self.__cog.get_user_info(user)
-                tool_msg = ToolCtxMessage({'user': user.name, 'info': info}, tool_call.id)
-            else:
-                tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
-            
-        elif call.function_name == 'get_user_info_by_key':
-            username = call.function_arguments['user']
             key = call.function_arguments['key']
             user = self.__cog.fetch_user_from_name(self.guild, username)
             if user:
-                info = self.__cog.get_user_info_by_key(user, key)
-                if info:
-                    tool_msg = ToolCtxMessage({'user': user.name, 'key': key, 'info': info}, tool_call.id)
+                if key:
+                    info = self.__cog.get_user_info_by_key(user, key)
+                    if info:
+                        tool_msg = ToolCtxMessage({'user': user.name, 'key': key, 'info': info}, tool_call.id)
+                    else:
+                        tool_msg = ToolCtxMessage({'error': f"Information '{key}' introuvable pour l'utilisateur '{username}'."}, tool_call.id)
                 else:
-                    tool_msg = ToolCtxMessage({'error': f"Information '{key}' introuvable pour l'utilisateur '{username}'."}, tool_call.id)
-            else:   
+                    info = self.__cog.get_user_info(user)
+                    tool_msg = ToolCtxMessage({'user': user.name, 'info': info}, tool_call.id)
+            else:
                 tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
                 
         elif call.function_name == 'find_users_by_key':
@@ -839,7 +818,9 @@ class Assistant(commands.Cog):
             self._sessions[guild.id] = session
         return session
     
-    # Outils -------------------------------------------------------------------
+    # Outils <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    
+    # Notes utilisateur 
     
     def fetch_user_from_name(self, guild: discord.Guild, name: str) -> discord.Member | None:
         user = discord.utils.find(lambda u: u.name == name.lower(), guild.members)
@@ -918,21 +899,8 @@ class Assistant(commands.Cog):
     def delete_all_user_info(self, user: discord.Member | discord.User) -> None:
         """Supprime toutes les informations d'un utilisateur."""
         self.data.get('global').execute('DELETE FROM assistant_memory WHERE user_id = ?', user.id)
-            
-    # Marqueurs d'outils -------------------------------------------------------
-    
-    def get_tool_markers(self, used_tools: list[str]) -> str:
-        """Renvoie les marqueurs d'outils utilisés."""
-        markers = {
-            'get_user_info': "<:summary:1299103283574607932> Résumé de notes",
-            'get_user_info_by_key': "<:search:1298816145356492842> Consultation de note",
-            'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
-            'set_user_info': "<:write:1298816135722172617> Édition de note",
-            'draw_tarot_cards': "<:cards:1299175044173398058> Tirage de tarot (Event Halloween)"
-        }
-        return ' '.join([markers.get(tool, '') for tool in used_tools])
-            
-    # Events -------------------------------------------------------------------
+        
+    # Events
     
     def draw_tarot_cards(self, n: int = 1, arcanum: Literal['major', 'minor', None] = None) -> list[dict]:
         """Renvoie une liste de cartes de tarot."""
@@ -962,6 +930,19 @@ class Assistant(commands.Cog):
             img_buffer.seek(0)
             cards.append({'name': card_name, 'image': discord.File(img_buffer, filename=f'{datetime.now().timestamp()}.jpeg')})
         return cards
+            
+    # Marqueurs d'outils -------------------------------------------------------
+    
+    def get_tool_markers(self, used_tools: list[str]) -> str:
+        """Renvoie les marqueurs d'outils utilisés."""
+        markers = {
+            'get_user_info': "<:summary:1299103283574607932> Résumé de notes",
+            'get_user_info_by_key': "<:search:1298816145356492842> Consultation de note",
+            'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
+            'set_user_info': "<:write:1298816135722172617> Édition de note",
+            'draw_tarot_cards': "<:cards:1299175044173398058> Tirage de tarot (Event Halloween)"
+        }
+        return ' '.join([markers.get(tool, '') for tool in used_tools])
     
     # AUDIO -------------------------------------------------------------------
     
@@ -1077,7 +1058,7 @@ class Assistant(commands.Cog):
                     await session.complete(interaction) # Pas besoin de récupérer le résultat vu qu'il édite l'interaction
                 except Exception as e:
                     logger.exception('An error occured while completing a message.', exc_info=e)
-                    return await message.reply(f"**Erreur** × Une erreur est survenue lors de la réponse à votre message.\n-# Réessayez dans quelques instants. Si le problème persiste, demandez à un modérateur de faire `/resethistory`.", mention_author=False)
+                    return await message.reply(f"**Erreur** × Une erreur est survenue lors de la réponse à votre message.\n-# Réessayez dans quelques instants. Si le problème persiste, faîtes `/resethistory`.", mention_author=False)
                 
                 completion = interaction.last_assistant_message
                 if not completion:
@@ -1166,7 +1147,6 @@ class Assistant(commands.Cog):
         
     @app_commands.command(name='resethistory')
     @app_commands.guild_only()
-    @app_commands.default_permissions(manage_messages=True)
     async def cmd_resethistory(self, interaction: Interaction):
         """Réinitialiser les messages en mémoire de l'assistant."""
         if not isinstance(interaction.guild, discord.Guild):
