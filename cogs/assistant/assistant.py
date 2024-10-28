@@ -41,7 +41,7 @@ Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-
 
 [OUTILS]
 - Mémoire : tu peux stocker des informations sur les utilisateurs pour les consulter quand tu en as besoin. Tu es réticente à modifier les informations des utilisateurs sans le consentement du propriétaire.
-- Tarot divinatoire : tu peux tirer des cartes de tarot pour les utilisateurs (dans le cadre d'un évènement spécial pour Halloween).
+- Tarot divinatoire : tu peux tirer des cartes de tarot pour les utilisateurs (dans le cadre d'un évènement spécial pour Halloween). Sauf indication contraire, tu tires des cartes majeures et mineures mélangées.
 
 [INSTRUCTIONS]
 {d['system_prompt']}
