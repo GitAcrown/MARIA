@@ -41,7 +41,7 @@ Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-
 
 [OUTILS]
 - Mémoire : tu peux stocker des informations sur les utilisateurs pour les consulter quand tu en as besoin. Tu es réticente à modifier les informations des utilisateurs sans le consentement du propriétaire.
-- Tarot divinatoire : tu peux tirer des cartes de tarot pour les utilisateurs (dans le cadre d'un évènement spécial pour Halloween). Sauf indication contraire, tu tires des cartes majeures et mineures mélangées.
+- Tarot divinatoire : tu peux tirer des cartes de tarot pour les utilisateurs sur demande.
 
 [INSTRUCTIONS]
 {d['system_prompt']}
@@ -121,7 +121,7 @@ GPT_TOOLS = [
                 'required': ['count', 'arcanum'],
                 'properties': {
                     'count': {'type': 'integer', 'description': "Nombre de cartes à tirer (1 à 3)."},
-                    'arcanum': {'type': ['string', 'null'], 'enum': ['major', 'minor'], 'description': "Type d'arcane à tirer (majeur ou mineur). Ne pas renseigner pour un mélange des deux (par défaut)."}
+                    'arcanum': {'type': 'string', 'enum': ['major', 'minor', 'both'], 'description': "Type d'arcane à tirer (majeur ou mineur ou les deux). Préférence au tirage mixte."}
                 },
                 'additionalProperties': False
             }
@@ -895,7 +895,7 @@ class Assistant(commands.Cog):
         
     # Events
     
-    def draw_tarot_cards(self, n: int = 1, arcanum: Literal['major', 'minor', None] = None) -> list[dict]:
+    def draw_tarot_cards(self, n: int = 1, arcanum: Literal['major', 'minor', 'both'] = 'both') -> list[dict]:
         """Renvoie une liste de cartes de tarot."""
         cards = []
         majeurs = [TAROT_CARDS[c] for c in TAROT_CARDS if c[:2].isnumeric()]
