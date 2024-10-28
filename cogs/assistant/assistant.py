@@ -446,8 +446,9 @@ class UserCtxMessage(ContextMessage):
             san_content = message.clean_content.replace(f'@{guild.me.display_name}', '').strip()
             msg_content = f'{author_name}:{san_content}'
             if isinstance(ref_message, discord.Message) and ref_message.content:
-                ref_author_name = ref_message.author.name if not ref_message.author.bot else f'{ref_message.author.name}[bot]'
-                msg_content = f'[Début de citation] {ref_author_name}:{ref_message.clean_content} [Fin de citation]\n{msg_content}'
+                if not ref_message.author.bot: # On ne cite pas les messages de bots
+                    ref_author_name = ref_message.author.name if not ref_message.author.bot else f'{ref_message.author.name}[bot]'
+                    msg_content = f'[Début de citation] {ref_author_name}:{ref_message.clean_content} [Fin de citation]\n{msg_content}'
             content.append(MessageElement('text', msg_content))
                 
         image_urls = []
@@ -604,7 +605,7 @@ class ChatSession:
     # Contexte de conversation
     
     def get_context(self) -> Sequence[ContextMessage]:
-        """Renovie les messages du contexte de conversation."""
+        """Renvoie les messages du contexte de conversation."""
         messages = []
         self.remove_expired_context()
         tokens = self.system_prompt.token_count
