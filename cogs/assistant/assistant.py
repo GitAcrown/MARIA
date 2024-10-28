@@ -913,9 +913,8 @@ class Assistant(commands.Cog):
                 card_name = random.choice(all_cards)
                 card = self._tarot_cards[card_name]
 
-            reverse = random.choice([True, False])
             img = Image.open(card)
-            if reverse:
+            if random.randint(0, 1):
                 img = img.rotate(180)
                 card_name = f"{card_name} (inversée)"
             img_buffer = io.BytesIO()
