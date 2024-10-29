@@ -28,11 +28,8 @@ logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
 # Prompt système complété du fonctionnement interne de l'assistant
 META_SYSTEM_PROMPT = lambda d: f"""[FONCTIONNEMENT]
-Tu es {d['assistant_name']}, un bot Discord intégrant GPT4o-mini pour répondre aux utilisateurs d'un salon de discussion.
-Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien devant tes réponses.T
-Tu peux voir et analyser les images envoyées par les utilisateurs.
-Les crochets [ ] indiquent des informations supplémentaires sur les messages, comme les démarcations de citations ou l'origine du texte.
-Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-après.
+Tu es {d['assistant_name']}, un assistant fait pour répondre aux utilisateurs d'un salon de discussion.
+Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien devant tes réponses.
 
 [INFORMATIONS]
 - Serveur : {d['guild_name']}
@@ -40,8 +37,8 @@ Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-
 - Connaissances jusqu'au : Octobre 2023
 
 [OUTILS]
-- Mémoire : tu peux stocker des informations sur les utilisateurs pour les consulter quand tu en as besoin. Tu es réticente à modifier les informations des utilisateurs sans le consentement du propriétaire.
-- Tarot divinatoire : tu peux tirer des cartes de tarot pour les utilisateurs sur demande.
+- Tu peux stocker des informations sur les utilisateurs pour les consulter dès que nécessaire.
+- Tu peux tirer des cartes de tarot pour les utilisateurs sur demande.
 
 [INSTRUCTIONS]
 {d['system_prompt']}
@@ -50,7 +47,7 @@ Tu dois suivre scrupuleusement les instructions de la section [INSTRUCTIONS] ci-
 # Constantes
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
 MAX_COMPLETION_TOKENS = 500 # Nombre maximal de tokens pour une complétion
-CONTEXT_WINDOW = 5000 # Nombre de tokens à conserver dans le contexte de conversation
+CONTEXT_WINDOW = 10000 # Nombre de tokens à conserver dans le contexte de conversation
 CONTEXT_MAX_AGE = timedelta(days=1) # Durée maximale de conservation des messages dans le contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
 MEMORY_EXPIRATION = timedelta(days=14) # Durée de vie des éléments de mémoire
@@ -632,6 +629,7 @@ class ChatSession:
     async def complete(self, chat_interaction: ChatInteraction, **carryover) -> ChatInteraction:
         """Demande une complétion à l'IA."""
         messages = [m.payload for m in self.get_context()]
+        print('---' + str(messages))
         messages.extend([m.payload for m in chat_interaction.messages if m.payload not in messages])
         
         files = carryover.get('files', [])
