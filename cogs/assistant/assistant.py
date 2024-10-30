@@ -910,7 +910,7 @@ class Assistant(commands.Cog):
     
     def get_server_emojis(self, guild: discord.Guild) -> list[str]:
         """Renvoie la liste des emojis du serveur."""
-        return [f"{emoji} {emoji.name}" for emoji in guild.emojis]
+        return [f"{emoji} ({emoji.name})" for emoji in guild.emojis]
         
     # Events
     
