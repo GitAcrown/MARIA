@@ -629,7 +629,6 @@ class ChatSession:
     async def complete(self, chat_interaction: ChatInteraction, **carryover) -> ChatInteraction:
         """Demande une complétion à l'IA."""
         messages = [m.payload for m in self.get_context()]
-        print('---' + str(messages))
         messages.extend([m.payload for m in chat_interaction.messages if m.payload not in messages])
         
         files = carryover.get('files', [])
