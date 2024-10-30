@@ -37,8 +37,8 @@ Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien
 - Connaissances jusqu'au : Octobre 2023
 
 [OUTILS]
-- Tu peux stocker des informations sur les utilisateurs pour les consulter dès que nécessaire.
-- Tu peux tirer des cartes de tarot pour les utilisateurs sur demande.
+- Tu peux gérer des notes sur les utilisateurs. Tu dois les consulter dès que nécessaire (comme lorsqu'un utilisateur pose une question sur un autre utilisateur).
+- Tu peux tirer des cartes de tarot pour les utilisateurs sur demande pour Halloween.
 
 [INSTRUCTIONS]
 {d['system_prompt']}
@@ -60,7 +60,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'get_user_info',
-            'description': "Récupère une ou toutes les notes sur l'utilisateur (sous forme de dictionnaire clé-valeur).",
+            'description': "Récupère une ou toutes les notes sur un utilisateur (sous forme de dictionnaire clé-valeur).",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -77,7 +77,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'find_users_by_key',
-            'description': "Recherche des utilisateurs ayant une clé de note spécifique. Utile pour les recherches par âge, localisation, etc.",
+            'description': "Recherche les utilisateurs possédant dans leurs notes une clé spécifique. Utile pour les recherches par âge, localisation, etc.",
             'strict': True,
             'parameters': {
                 'type': 'object',
