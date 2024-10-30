@@ -28,18 +28,15 @@ logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
 # Prompt système complété du fonctionnement interne de l'assistant
 META_SYSTEM_PROMPT = lambda d: f"""[FONCTIONNEMENT]
-Tu es {d['assistant_name']}, un assistant fait pour répondre aux utilisateurs d'un salon de discussion.
+Tu es {d['assistant_name']}. Tu réponds aux utilisateurs d'un salon de discussion.
 Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien devant tes réponses.
-
 [INFORMATIONS]
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
-- Connaissances jusqu'au : Octobre 2023
-
 [OUTILS]
 - Tu peux gérer des notes sur les utilisateurs. Tu dois les consulter dès que nécessaire (comme lorsqu'un utilisateur pose une question sur un autre utilisateur).
+- Tu peux utiliser des emojis du serveur pour enrichir tes réponses.
 - Tu peux tirer des cartes de tarot pour les utilisateurs sur demande pour Halloween.
-
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
@@ -106,6 +103,20 @@ GPT_TOOLS = [
                 'additionalProperties': False
             }
         }
+    },
+    { # Récupération des emojis du serveur
+     'type': 'function',
+        'function': {
+            'name': 'get_server_emojis',
+            'description': "Récupère la liste des emojis du serveur.",
+            'strict': True,
+            'parameters': {
+                'type': 'object',
+                'required': [],
+                'properties': {},
+                'additionalProperties': False
+            }
+        }   
     },
     { # Carte de tarot (évènement spécial d'Halloween)
         'type': 'function',
@@ -733,6 +744,10 @@ class ChatSession:
             tool_msg = ToolCtxMessage({'cards': [c['name'] for c in cards]}, tool_call.id)
             tool_msg.attachments = [c['image'] for c in cards]
             
+        elif call.function_name == 'get_server_emojis':
+            emojis = self.__cog.get_server_emojis(self.guild)
+            tool_msg = ToolCtxMessage({'emojis': emojis}, tool_call.id)
+            
         if tool_msg:
             tool_msg.timestamp = call.timestamp + timedelta(seconds=1)
         return call, tool_msg
@@ -890,6 +905,12 @@ class Assistant(commands.Cog):
     def delete_all_user_info(self, user: discord.Member | discord.User) -> None:
         """Supprime toutes les informations d'un utilisateur."""
         self.data.get('global').execute('DELETE FROM assistant_memory WHERE user_id = ?', user.id)
+        
+    # Fonctions de serveur ----------------------------------------------------
+    
+    def get_server_emojis(self, guild: discord.Guild) -> list[str]:
+        """Renvoie la liste des emojis du serveur."""
+        return [f"{emoji} {emoji.name}" for emoji in guild.emojis]
         
     # Events
     
