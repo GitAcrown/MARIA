@@ -440,7 +440,7 @@ class UserCtxMessage(ContextMessage):
         ref_message = message.reference.resolved if message.reference else None
         if message.content:
             author_name = message.author.name if not message.author.bot else f'{message.author.name}[bot]'
-            san_content = message.clean_content.replace(f'@{guild.me.display_name}', '').strip()
+            san_content = message.content.replace(guild.me.mention, '').strip()
             msg_content = f'{author_name}:{san_content}'
             if isinstance(ref_message, discord.Message) and ref_message.content:
                 if not ref_message.author.bot: # On ne cite pas les messages de bots
