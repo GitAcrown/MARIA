@@ -35,7 +35,7 @@ Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien
 - Date/heure : {d['current_time']}
 [OUTILS]
 - Tu peux gérer des notes sur les utilisateurs. Tu dois les consulter dès que nécessaire (comme lorsqu'un utilisateur pose une question sur un autre utilisateur).
-- Tu peux utiliser des emojis du serveur pour enrichir tes réponses.
+- Tu peux accéder à la liste des emojis Discord du serveur pour les utiliser.
 - Tu peux tirer des cartes de tarot pour les utilisateurs sur demande pour Halloween.
 [INSTRUCTIONS]
 {d['system_prompt']}
