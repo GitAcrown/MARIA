@@ -497,6 +497,9 @@ class ChatInteraction:
     def __repr__(self) -> str:
         return f'<ChatInteraction messages={len(self.messages)}>'
     
+    def __iter__(self) -> Iterable[ContextMessage]:
+        return iter(self.messages)
+    
     # Propriétés globales
     
     @property
@@ -614,19 +617,16 @@ class ChatSession:
     
     def get_context(self) -> Sequence[ContextMessage]:
         """Renvoie les messages du contexte de conversation."""
-        messages = []
+        inters = []
         self.remove_expired_context()
         tokens = self.system_prompt.token_count
-        interactions = sorted(self._interactions.values(), key=lambda i: i.messages[-1].timestamp)
+        interactions = self.get_interactions()[::-1]    
         for interaction in interactions:
-            if not interaction.completed:
-                continue # On ne garde que les interactions complètes
             tokens += interaction.total_token_count
-            messages.extend(interaction.messages)
+            inters.append(interaction)
             if tokens >= self.context_window:
                 break
-            
-        context = [self.system_prompt] + messages
+        context = [self.system_prompt] + [m for i in inters[::-1] for m in i.messages]
         return context
     
     def remove_expired_context(self) -> None:
@@ -640,7 +640,6 @@ class ChatSession:
     async def complete(self, chat_interaction: ChatInteraction, **carryover) -> ChatInteraction:
         """Demande une complétion à l'IA."""
         messages = [m.payload for m in self.get_context()]
-        messages.extend([m.payload for m in chat_interaction.messages if m.payload not in messages])
         
         files = carryover.get('files', [])
         tools = carryover.get('tools', [])
