@@ -46,6 +46,7 @@ DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux qu
 MAX_COMPLETION_TOKENS = 500 # Nombre maximal de tokens pour une complétion
 CONTEXT_WINDOW = 10000 # Nombre de tokens à conserver dans le contexte de conversation
 CONTEXT_MAX_AGE = timedelta(days=1) # Durée maximale de conservation des messages dans le contexte de conversation
+CONTEXT_CLEANUP_INTERVAL = timedelta(hours=1) # Intervalle de nettoyage du contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
 MEMORY_EXPIRATION = timedelta(days=14) # Durée de vie des éléments de mémoire
 EXPIRATION_CHECK_INTERVAL = timedelta(hours=12) # Intervalle de vérification de l'expiration de la mémoire
@@ -577,7 +578,8 @@ class ChatSession:
         self.context_window = context_window
         
         self._interactions : dict[str, ChatInteraction] = {} # Historique des messages par groupes d'interactions
-    
+        self._last_history_cleanup = datetime.now()
+        
     def __repr__(self) -> str:
         return f'<ChatSession guild={self.guild.name} interactions={len(self._interactions)}>'
     
@@ -613,11 +615,21 @@ class ChatSession:
         for interaction in self.get_interactions(cond):
             self.remove_interaction(interaction.id)
             
+    def delete_old_interactions(self) -> None:
+        if self._last_history_cleanup < datetime.now() - CONTEXT_CLEANUP_INTERVAL:  
+            self._last_history_cleanup = datetime.now()
+        else:
+            return
+        for interaction in self.get_interactions(lambda i: i.messages[-1].timestamp < datetime.now(pytz.utc) - CONTEXT_MAX_AGE):
+            if interaction.completed:
+                self.remove_interaction(interaction.id)
+            
     # Contexte de conversation
     
     def get_context(self) -> Sequence[ContextMessage]:
         """Renvoie les messages du contexte de conversation."""
         inters = []
+        self.delete_old_interactions()
         tokens = self.system_prompt.token_count
         interactions = self.get_interactions()[::-1]    
         for interaction in interactions:
