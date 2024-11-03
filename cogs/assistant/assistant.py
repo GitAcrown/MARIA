@@ -618,7 +618,6 @@ class ChatSession:
     def get_context(self) -> Sequence[ContextMessage]:
         """Renvoie les messages du contexte de conversation."""
         inters = []
-        self.remove_expired_context()
         tokens = self.system_prompt.token_count
         interactions = self.get_interactions()[::-1]    
         for interaction in interactions:
@@ -629,12 +628,6 @@ class ChatSession:
         context = [self.system_prompt] + [m for i in inters[::-1] for m in i.messages]
         return context
     
-    def remove_expired_context(self) -> None:
-        """Supprime les messages du contexte de conversation expirés."""
-        expired = datetime.now(pytz.utc) - CONTEXT_MAX_AGE
-        for interaction in self.get_interactions(lambda i: i.messages[-1].timestamp < expired):
-            self.remove_interaction(interaction.id)
-            
     # Complétion de l'IA
     
     async def complete(self, chat_interaction: ChatInteraction, **carryover) -> ChatInteraction:
