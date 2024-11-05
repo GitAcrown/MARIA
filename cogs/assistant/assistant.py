@@ -118,87 +118,6 @@ GPT_TOOLS = [
     }
 ]
 
-TAROT_CARDS = {
-    "00": "Le Mat",
-    "01": "Le Bateleur",
-    "02": "La Papesse",
-    "03": "L'Impératrice",
-    "04": "L'Empereur",
-    "05": "Le Pape",
-    "06": "L'Amoureux",
-    "07": "Le Chariot",
-    "08": "La Justice",
-    "09": "L'Ermite",
-    "10": "La Roue de Fortune",
-    "11": "La Force",
-    "12": "Le Pendu",
-    "13": "La Mort",
-    "14": "La Tempérance",
-    "15": "Le Diable",
-    "16": "La Tour",
-    "17": "L'Étoile",
-    "18": "La Lune",
-    "19": "Le Soleil",
-    "20": "Le Jugement",
-    "21": "Le Monde",
-    "cu01": "As de Coupe",
-    "cu02": "Deux de Coupe",
-    "cu03": "Trois de Coupe",
-    "cu04": "Quatre de Coupe",
-    "cu05": "Cinq de Coupe",
-    "cu06": "Six de Coupe",
-    "cu07": "Sept de Coupe",
-    "cu08": "Huit de Coupe",
-    "cu09": "Neuf de Coupe",
-    "cu10": "Dix de Coupe",
-    "cuki": "Roi de Coupe",
-    "cukn": "Chevalier de Coupe",
-    "cupa": "Valet de Coupe",
-    "cuqu": "Reine de Coupe",
-    "pe01": "As de Denier",
-    "pe02": "Deux de Denier",
-    "pe03": "Trois de Denier",
-    "pe04": "Quatre de Denier",
-    "pe05": "Cinq de Denier",
-    "pe06": "Six de Denier",
-    "pe07": "Sept de Denier",
-    "pe08": "Huit de Denier",
-    "pe09": "Neuf de Denier",
-    "pe10": "Dix de Denier",
-    "peki": "Roi de Denier",
-    "pekn": "Chevalier de Denier",
-    "pepa": "Valet de Denier",
-    "pequ": "Reine de Denier",
-    "sw01": "As d'Épée",
-    "sw02": "Deux d'Épée",
-    "sw03": "Trois d'Épée",
-    "sw04": "Quatre d'Épée",
-    "sw05": "Cinq d'Épée",
-    "sw06": "Six d'Épée",
-    "sw07": "Sept d'Épée",
-    "sw08": "Huit d'Épée",
-    "sw09": "Neuf d'Épée",
-    "sw10": "Dix d'Épée",
-    "swki": "Roi d'Épée",
-    "swkn": "Chevalier d'Épée",
-    "swpa": "Valet d'Épée",
-    "swqu": "Reine d'Épée",
-    "wa01": "As de Bâton",
-    "wa02": "Deux de Bâton",
-    "wa03": "Trois de Bâton",
-    "wa04": "Quatre de Bâton",
-    "wa05": "Cinq de Bâton",
-    "wa06": "Six de Bâton",
-    "wa07": "Sept de Bâton",
-    "wa08": "Huit de Bâton",
-    "wa09": "Neuf de Bâton",
-    "wa10": "Dix de Bâton",
-    "waki": "Roi de Bâton",
-    "wakn": "Chevalier de Bâton",
-    "wapa": "Valet de Bâton",
-    "waqu": "Reine de Bâton",
-}
-
 # Utils ----------------------------------------------------------------------
 
 def sanitize_text(text: str) -> str:
@@ -779,23 +698,11 @@ class Assistant(commands.Cog):
         
         self._sessions = {}
         self._last_memory_cleanup = 0
-        self._tarot_cards = self.__load_assets()
         
     async def cog_unload(self):
         self.data.close_all()
         await self.openai_client.close()
         
-    def __load_assets(self) -> dict[str, Path]:
-        folder = self.data.assets_path / 'tarot'
-        cards = {}
-        for filepath in folder.iterdir():
-            if filepath.suffix == '.jpeg':
-                file_name = filepath.stem
-                card_name = TAROT_CARDS.get(file_name)
-                if card_name:
-                    cards[card_name] = filepath
-        return cards
-    
     # Configurations -----------------------------------------------------------
     
     def get_guild_config(self, guild: discord.Guild) -> dict:
