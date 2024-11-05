@@ -2,7 +2,6 @@ import io
 import json
 import logging
 import os
-import random
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,13 +12,11 @@ import pytz
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from moviepy.editor import VideoFileClip
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
-
-from PIL import Image
 
 from common import dataio
 from common.utils import fuzzy, pretty
@@ -30,13 +27,13 @@ logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 META_SYSTEM_PROMPT = lambda d: f"""[FONCTIONNEMENT]
 Tu es {d['assistant_name']}. Tu réponds aux utilisateurs d'un salon de discussion.
 Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien devant tes réponses.
+Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 [INFORMATIONS]
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
 - Tu peux gérer des notes sur les utilisateurs. Tu dois absolument les consulter dès qu'un utilisateur te demande des informations sur lui ou un autre.
-- Tu peux accéder à la liste des emojis Discord du serveur pour les utiliser.
-- Tu peux tirer des cartes de tarot pour les utilisateurs sur demande pour Halloween.
+- Tu peux accéder à la liste des emojis du serveur pour les utiliser.
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
@@ -109,7 +106,7 @@ GPT_TOOLS = [
      'type': 'function',
         'function': {
             'name': 'get_server_emojis',
-            'description': "Récupère la liste des emojis du serveur.",
+            'description': "Récupère la liste des emojis Discord du serveur.",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -118,23 +115,6 @@ GPT_TOOLS = [
                 'additionalProperties': False
             }
         }   
-    },
-    { # Carte de tarot (évènement spécial d'Halloween)
-        'type': 'function',
-        'function': {
-            'name': 'draw_tarot_cards',
-            'description': "Tire une ou plusieurs cartes de tarot pour un utilisateur.",
-            'strict': True,
-            'parameters': {
-                'type': 'object',
-                'required': ['count', 'arcanum'],
-                'properties': {
-                    'count': {'type': 'integer', 'description': "Nombre de cartes à tirer (1 à 3)."},
-                    'arcanum': {'type': 'string', 'enum': ['major', 'minor', 'both'], 'description': "Type d'arcane à tirer (majeur ou mineur ou les deux). Préférence au tirage mixte."}
-                },
-                'additionalProperties': False
-            }
-        }
     }
 ]
 
@@ -439,8 +419,11 @@ class UserCtxMessage(ContextMessage):
                  content: str | Iterable[MessageElement],
                  name: str | None = None,
                  *,
-                 timestamp: datetime = datetime.now(pytz.utc)) -> None:
+                 timestamp: datetime = datetime.now(pytz.utc),
+                 channel: discord.TextChannel | discord.Thread | None = None) -> None:
         super().__init__('user', content, name=name, timestamp=timestamp)
+        
+        self._channel: discord.TextChannel | discord.Thread | None = channel
 
     @classmethod
     async def from_message(cls, message: discord.Message) -> 'UserCtxMessage':
@@ -487,7 +470,9 @@ class UserCtxMessage(ContextMessage):
         if image_urls:
             content.extend([MessageElement('image_url', url) for url in image_urls])
             
-        return cls(content, name=message.author.name, timestamp=message.created_at)
+        channel = message.channel if isinstance(message.channel, (discord.TextChannel, discord.Thread)) else None
+            
+        return cls(content, name=message.author.name, timestamp=message.created_at, channel=channel)
     
     
 class ChatInteraction:
@@ -526,6 +511,14 @@ class ChatInteraction:
     def contains_image(self) -> bool:
         """Renvoie True si un élément de l'interaction est une image."""
         return any([m.type == 'image_url' for elem in self.messages for m in elem.content])
+    
+    @property
+    def retrieved_channel(self) -> discord.TextChannel | discord.Thread | None:
+        """Tente de récupérer le salon de la dernière question de l'interaction."""
+        for message in self.messages:
+            if isinstance(message, UserCtxMessage):
+                return message._channel
+        return None
     
     # Propriétés des messages
     
@@ -740,13 +733,6 @@ class ChatSession:
                 tool_msg = ToolCtxMessage({'user': user.name, 'key': key, 'value': value}, tool_call.id)
             else:
                 tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
-                
-        elif call.function_name == 'draw_tarot_cards':
-            count = call.function_arguments['count']
-            arcanum = call.function_arguments['arcanum']
-            cards = self.__cog.draw_tarot_cards(count, arcanum)
-            tool_msg = ToolCtxMessage({'cards': [c['name'] for c in cards]}, tool_call.id)
-            tool_msg.attachments = [c['image'] for c in cards]
             
         elif call.function_name == 'get_server_emojis':
             emojis = self.__cog.get_server_emojis(self.guild)
@@ -916,36 +902,6 @@ class Assistant(commands.Cog):
         """Renvoie la liste des emojis du serveur."""
         return [f"{emoji} ({emoji.name})" for emoji in guild.emojis]
         
-    # Events
-    
-    def draw_tarot_cards(self, n: int = 1, arcanum: Literal['major', 'minor', 'both'] = 'both') -> list[dict]:
-        """Renvoie une liste de cartes de tarot."""
-        cards = []
-        majeurs = [TAROT_CARDS[c] for c in TAROT_CARDS if c[:2].isnumeric()]
-        mineurs = [TAROT_CARDS[c] for c in TAROT_CARDS if TAROT_CARDS[c] not in majeurs]
-        all_cards = majeurs + mineurs
-        
-        for _ in range(n):
-            if arcanum == 'major':
-                card_name = random.choice(majeurs)
-                card = self._tarot_cards[card_name]
-            elif arcanum == 'minor':
-                card_name = random.choice(mineurs)
-                card = self._tarot_cards[card_name]
-            else:
-                card_name = random.choice(all_cards)
-                card = self._tarot_cards[card_name]
-
-            img = Image.open(card)
-            if random.randint(0, 1):
-                img = img.rotate(180)
-                card_name = f"{card_name} (inversée)"
-            img_buffer = io.BytesIO()
-            img.save(img_buffer, format='JPEG')
-            img_buffer.seek(0)
-            cards.append({'name': card_name, 'image': discord.File(img_buffer, filename=f'{datetime.now().timestamp()}.jpeg')})
-        return cards
-            
     # Marqueurs d'outils -------------------------------------------------------
     
     def get_tool_markers(self, used_tools: list[str]) -> str:
@@ -1069,7 +1025,7 @@ class Assistant(commands.Cog):
             interaction = session.create_interaction(usermsg)
             async with message.channel.typing():
                 try:
-                    await session.complete(interaction) # Pas besoin de récupérer le résultat vu qu'il édite l'interaction
+                    await session.complete(interaction)
                 except Exception as e:
                     logger.exception('An error occured while completing a message.', exc_info=e)
                     return await message.reply(f"**Erreur** × Une erreur est survenue lors de la réponse à votre message.\n-# Réessayez dans quelques instants. Si le problème persiste, faîtes `/resethistory`.", mention_author=False)
