@@ -816,8 +816,7 @@ class Assistant(commands.Cog):
         markers = {
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
-            'set_user_info': "<:write:1298816135722172617> Édition de note",
-            'draw_tarot_cards': "<:cards:1299175044173398058> Tirage de tarot (Event Halloween)"
+            'set_user_info': "<:write:1298816135722172617> Édition de note"
         }
         return ' '.join([markers.get(tool, '') for tool in used_tools])
     
