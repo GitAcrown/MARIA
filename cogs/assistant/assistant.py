@@ -7,13 +7,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Iterable, Literal, Sequence
 
-import comm
 import discord
 import pytz
 import tiktoken
 import unidecode
 from discord import Interaction, app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from moviepy.editor import VideoFileClip
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
