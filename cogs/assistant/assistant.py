@@ -32,7 +32,7 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
-- Tu peux gérer des notes sur les utilisateurs. Tu dois absolument les consulter dès qu'un utilisateur te demande des informations sur lui ou un autre.
+- Tu peux gérer des notes sur les utilisateurs. Tu dois les consulter dès qu'un utilisateur te demande des informations sur lui ou un autre.
 - Tu peux accéder à la liste des emojis du serveur pour les utiliser.
 [INSTRUCTIONS]
 {d['system_prompt']}
