@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Iterable, Literal, Sequence
 
+import comm
 import discord
 import pytz
 import tiktoken
@@ -42,11 +43,9 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
 MAX_COMPLETION_TOKENS = 500 # Nombre maximal de tokens pour une complétion
 CONTEXT_WINDOW = 10000 # Nombre de tokens à conserver dans le contexte de conversation
-CONTEXT_MAX_AGE = timedelta(days=1) # Durée maximale de conservation des messages dans le contexte de conversation
+CONTEXT_MAX_AGE = timedelta(hours=48) # Durée maximale de conservation des messages dans le contexte de conversation
 CONTEXT_CLEANUP_INTERVAL = timedelta(hours=1) # Intervalle de nettoyage du contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
-MEMORY_EXPIRATION = timedelta(days=365) # Durée de vie des éléments de mémoire
-EXPIRATION_CHECK_INTERVAL = timedelta(days=1) # Intervalle de vérification de l'expiration de la mémoire
 ENABLE_TOOLS = True # Activation des outils de l'assistant
 
 # Définition des outils de l'assistant
@@ -683,7 +682,6 @@ class Assistant(commands.Cog):
                 user_id INTEGER,
                 key TEXT,
                 value TEXT,
-                last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, key) ON CONFLICT REPLACE
                 )'''
         )
@@ -697,7 +695,6 @@ class Assistant(commands.Cog):
         self.bot.tree.add_command(self.create_audio_transcription)
         
         self._sessions = {}
-        self._last_memory_cleanup = 0
         
     async def cog_unload(self):
         self.data.close_all()
@@ -749,46 +746,25 @@ class Assistant(commands.Cog):
         if closest_nickname:
             user = discord.utils.find(lambda u: u.nick == closest_nickname[0], guild.members)
             return user if user else None
-        
-    def delete_expired_memory(self) -> None:
-        """Supprime les informations d'utilisateurs expirées (non consultées depuis MEMORY_EXPIRATION)."""
-        # On ne check l'expiration de la mémoire que toutes EXPIRATION_CHECK_INTERVAL
-        if datetime.now().timestamp() - self._last_memory_cleanup < EXPIRATION_CHECK_INTERVAL.total_seconds():
-            return
-        expired = datetime.now(pytz.utc) - MEMORY_EXPIRATION
-        self.data.get('global').execute('DELETE FROM assistant_memory WHERE last_accessed < ?', expired)
-        self._last_memory_cleanup = datetime.now().timestamp()
     
     def get_user_info(self, user: discord.Member | discord.User) -> dict:
         """Retourne les informations d'un utilisateur."""
-        self.delete_expired_memory()
         r = self.data.get('global').fetchall('SELECT * FROM assistant_memory WHERE user_id = ?', user.id)
-        # On met à jour la date d'accès
-        if r:
-            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE user_id = ?', user.id)
         return {row['key']: row['value'] for row in r}
     
     def get_user_info_by_key(self, user: discord.Member | discord.User, key: str) -> str | None:
         """Retourne une information spécifique d'un utilisateur."""
-        self.delete_expired_memory()
         keys = self.data.get('global').fetchall('SELECT key FROM assistant_memory WHERE user_id = ?', user.id)
         if key not in [row['key'] for row in keys]:
             closest_key = fuzzy.extract_one(key, [row['key'] for row in keys])
             if closest_key:
                 key = closest_key[0]
         r = self.data.get('global').fetchone('SELECT value FROM assistant_memory WHERE user_id = ? AND key = ?', user.id, key)
-        # On met à jour la date d'accès
-        if r:
-            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND key = ?', user.id, key)
         return r['value'] if r else None
     
     def find_users_by_key(self, guild: discord.Guild, key: str) -> list[discord.Member]:
         """Retourne les utilisateurs ayant une information spécifique."""
-        self.delete_expired_memory()
         r = self.data.get('global').fetchall('SELECT user_id FROM assistant_memory WHERE key = ?', key)
-        # On met à jour la date d'accès
-        if r:
-            self.data.get('global').execute('UPDATE assistant_memory SET last_accessed = CURRENT_TIMESTAMP WHERE key = ?', key)
         guild_members = {member.id: member for member in guild.members}
         return [guild_members[row['user_id']] for row in r if row['user_id'] in guild_members]
     
@@ -1046,9 +1022,9 @@ class Assistant(commands.Cog):
             return await interaction.response.send_message(f"**Notes de l'assistant** · Aucune note n'est associée à vous.", ephemeral=True)
         
         text = '\n'.join(sorted([f"`{key}` → *{value}*" for key, value in notes.items()]))
-        embed = discord.Embed(title=f"Notes de l'assistant [BETA]", description=text, color=discord.Color(0x000001))
+        embed = discord.Embed(title=f"Notes de l'assistant", description=text, color=discord.Color(0x000001))
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.set_footer(text=f"Notes gérées localement par l'assistant · Expirent après {MEMORY_EXPIRATION.days} jours sans consultation")
+        embed.set_footer(text=f"Notes gérées localement par l'assistant")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
     @memory_group.command(name='edit')
@@ -1101,6 +1077,40 @@ class Assistant(commands.Cog):
         keys = self.get_user_info(user).keys()
         fuzz = fuzzy.finder(current, keys)
         return [app_commands.Choice(name=key, value=key) for key in fuzz][:15]
+    
+    # COMMANDES PROPRIO ========================================================
+    
+    @commands.command(name='setdata')
+    @commands.is_owner()
+    async def cmd_setdata(self, ctx: commands.Context, user_id: int, key: str, value: str):
+        """Modifie une donnée utilisateur."""
+        user = self.bot.get_user(user_id)
+        if not user:
+            return await ctx.send(f"**Erreur** × Utilisateur introuvable.")
+        self.set_user_info(user, key, value)
+        await ctx.send(f"**Donnée ajoutée** · La donnée `{key} → {value}` a été ajoutée pour l'utilisateur {user}.")
+        
+    @commands.command(name='getdata')
+    @commands.is_owner()
+    async def cmd_getdata(self, ctx: commands.Context, user_id: int, key: str):
+        """Récupérer une donnée utilisateur."""
+        user = self.bot.get_user(user_id)
+        if not user:
+            return await ctx.send(f"**Erreur** × Utilisateur introuvable.")
+        value = self.get_user_info_by_key(user, key)
+        if not value:
+            return await ctx.send(f"**Donnée introuvable** × Aucune donnée n'a été trouvée pour la clé `{key}`.")
+        await ctx.send(f"**Donnée trouvée** · La donnée associée à la clé `{key}` pour l'utilisateur {user} est `{value}`.")
+        
+    @commands.command(name='deletedata')
+    @commands.is_owner()
+    async def cmd_deletedata(self, ctx: commands.Context, user_id: int, key: str):
+        """Supprimer une donnée utilisateur."""
+        user = self.bot.get_user(user_id)
+        if not user:
+            return await ctx.send(f"**Erreur** × Utilisateur introuvable.")
+        self.set_user_info(user, key, None)
+        await ctx.send(f"**Donnée supprimée** · La donnée associée à la clé `{key}` pour l'utilisateur {user} a été supprimée.")
         
 async def setup(bot):
     await bot.add_cog(Assistant(bot))
