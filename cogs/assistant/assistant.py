@@ -32,8 +32,8 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
-- Tu peux gérer des notes sur les utilisateurs. Tu dois les consulter dès qu'un utilisateur te demande des informations sur lui ou un autre.
-- Tu peux accéder à la liste des emojis du serveur pour les utiliser.
+- Créer et gérer des notes sur les utilisateurs : n'hésite pas à les consulter dès qu'un utilisateur te demande des informations sur lui ou d'autres membres.
+- Liste des emojis du serveur : tu peux y accéder pour les utiliser librement.
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
@@ -60,7 +60,7 @@ GPT_TOOLS = [
                 'required': ['user', 'key'],
                 'properties': {
                     'user': {'type': 'string', 'description': "Nom de l'utilisateur à rechercher."},
-                    'key': {'type': ['string', 'null'], 'description': "Clé de l'information à récupérer (ex. 'age', 'ville' etc.). Ne pas renseigner pour obtenir toutes les informations."}
+                    'key': {'type': ['string', 'null'], 'description': "Clé de l'information à récupérer (ex. 'age', 'ville' etc.). Ne pas renseigner pour récupérer l'ensemble des notes en mémoire."}
                 },
                 'additionalProperties': False
             }
