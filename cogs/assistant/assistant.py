@@ -45,8 +45,8 @@ CONTEXT_WINDOW = 10000 # Nombre de tokens à conserver dans le contexte de conve
 CONTEXT_MAX_AGE = timedelta(days=1) # Durée maximale de conservation des messages dans le contexte de conversation
 CONTEXT_CLEANUP_INTERVAL = timedelta(hours=1) # Intervalle de nettoyage du contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
-MEMORY_EXPIRATION = timedelta(days=14) # Durée de vie des éléments de mémoire
-EXPIRATION_CHECK_INTERVAL = timedelta(hours=12) # Intervalle de vérification de l'expiration de la mémoire
+MEMORY_EXPIRATION = timedelta(days=365) # Durée de vie des éléments de mémoire
+EXPIRATION_CHECK_INTERVAL = timedelta(days=1) # Intervalle de vérification de l'expiration de la mémoire
 ENABLE_TOOLS = True # Activation des outils de l'assistant
 
 # Définition des outils de l'assistant
