@@ -1089,17 +1089,18 @@ class Assistant(commands.Cog):
         self.set_user_info(user, key, value)
         await ctx.send(f"**Donnée ajoutée** · La donnée `{key} → {value}` a été ajoutée pour l'utilisateur {user}.")
         
-    @commands.command(name='getdata')
+    @commands.command(name='listdata')
     @commands.is_owner()
-    async def cmd_getdata(self, ctx: commands.Context, user_id: int, key: str):
-        """Récupérer une donnée utilisateur."""
+    async def cmd_listdata(self, ctx: commands.Context, user_id: int):
+        """Liste les données d'un utilisateur."""
         user = self.bot.get_user(user_id)
         if not user:
             return await ctx.send(f"**Erreur** × Utilisateur introuvable.")
-        value = self.get_user_info_by_key(user, key)
-        if not value:
-            return await ctx.send(f"**Donnée introuvable** × Aucune donnée n'a été trouvée pour la clé `{key}`.")
-        await ctx.send(f"**Donnée trouvée** · La donnée associée à la clé `{key}` pour l'utilisateur {user} est `{value}`.")
+        notes = self.get_user_info(user)
+        if not notes:
+            return await ctx.send(f"**Notes** · Aucune note n'est associée à l'utilisateur {user}.")
+        text = '\n'.join([f"`{key}` → *{value}*" for key, value in notes.items()])
+        await ctx.send(f"**Notes de l'utilisateur {user}**\n{text}")
         
     @commands.command(name='deletedata')
     @commands.is_owner()
