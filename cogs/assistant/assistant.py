@@ -111,10 +111,11 @@ GPT_TOOLS = [
             'strict': True,
             'parameters': {
                 'type': 'object',
-                'required': ['query', 'lang'],
+                'required': ['query', 'lang', 'num_results'],
                 'properties': {
                     'query': {'type': 'string', 'description': "Requête de recherche."},
                     'lang': {'type': 'string', 'description': "Langue de recherche (ex. 'fr')."},
+                    'num_results': {'type': 'integer', 'description': "Nombre de résultats à renvoyer. (Max. 10)."}
                 },
                 'additionalProperties': False
             }
@@ -678,7 +679,8 @@ class ChatSession:
         elif call.function_name == 'search_web_pages':
             query = call.function_arguments['query']
             lang = call.function_arguments['lang']
-            results = self.__cog.search_web_pages(query, lang=lang)
+            num = min(call.function_arguments['num_results'], 10)
+            results = self.__cog.search_web_pages(query, lang=lang, num_results=num)
             tool_msg = ToolCtxMessage({'query': query, 'results': results}, tool_call.id)
             
         if tool_msg:
