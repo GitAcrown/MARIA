@@ -13,10 +13,12 @@ import tiktoken
 import unidecode
 from discord import Interaction, app_commands
 from discord.ext import commands
+from googlesearch import search
 from moviepy.editor import VideoFileClip
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
-from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_tool_call import \
+    ChatCompletionMessageToolCall
 
 from common import dataio
 from common.utils import fuzzy, pretty
@@ -32,8 +34,9 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
-- Créer et gérer des notes sur les utilisateurs : n'hésite pas à les consulter dès qu'un utilisateur te demande des informations sur lui ou d'autres membres.
-- Liste des emojis du serveur : tu peux y accéder pour les utiliser librement.
+- Notes d'utilisateurs : utilise-les dès que nécessaire pour récupérer, rechercher ou mettre à jour des informations sur les utilisateurs.
+- Recherche web : pour récupérer des liens vers des pages web.
+- Emojis du serveur : pour récupérer la liste des emojis Discord du serveur.
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
@@ -53,7 +56,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'get_user_info',
-            'description': "Récupère une ou toutes les notes sur un utilisateur (sous forme de dictionnaire clé-valeur).",
+            'description': "Renvoie une clé-valeur d'information sur un utilisateur. Renvoie l'ensemble des informations si aucune clé n'est renseignée.",  
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -70,7 +73,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'find_users_by_key',
-            'description': "Recherche les utilisateurs possédant dans leurs notes une clé spécifique. Utile pour les recherches par âge, localisation, etc.",
+            'description': "Recherche les utilisateurs selon une clé d'information. Renvoie un dictionnaire avec les utilisateurs trouvés et leurs notes.",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -86,7 +89,7 @@ GPT_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'set_user_info',
-            'description': "Met à jour une note d'un utilisateur.",
+            'description': "Met à jour la note liée à une clé pour un utilisateur.",
             'strict': True,
             'parameters': {
                 'type': 'object',
@@ -95,6 +98,23 @@ GPT_TOOLS = [
                     'user': {'type': 'string', 'description': "Nom de l'utilisateur à mettre à jour."},
                     'key': {'type': 'string', 'description': "Clé de l'information à mettre à jour."},
                     'value': {'type': ['string', 'null'], 'description': "Valeur à mettre à jour. Ne pas renseigner pour supprimer la clé."}
+                },
+                'additionalProperties': False
+            }
+        }
+    },
+    { # Recherche de pages web
+     'type': 'function',
+        'function': {
+            'name': 'search_web_pages',
+            'description': "Recherche des liens vers des pages web. Renvoie les titres, descriptions et URLs des résultats.",
+            'strict': True,
+            'parameters': {
+                'type': 'object',
+                'required': ['query', 'lang'],
+                'properties': {
+                    'query': {'type': 'string', 'description': "Requête de recherche."},
+                    'lang': {'type': 'string', 'description': "Langue de recherche (ex. 'fr')."},
                 },
                 'additionalProperties': False
             }
@@ -654,6 +674,12 @@ class ChatSession:
         elif call.function_name == 'get_server_emojis':
             emojis = self.__cog.get_server_emojis(self.guild)
             tool_msg = ToolCtxMessage({'emojis': emojis}, tool_call.id)
+        
+        elif call.function_name == 'search_web_pages':
+            query = call.function_arguments['query']
+            lang = call.function_arguments['lang']
+            results = self.__cog.search_web_pages(query, lang=lang)
+            tool_msg = ToolCtxMessage({'query': query, 'results': results}, tool_call.id)
             
         if tool_msg:
             tool_msg.timestamp = call.timestamp + timedelta(seconds=1)
@@ -778,6 +804,13 @@ class Assistant(commands.Cog):
         """Supprime toutes les informations d'un utilisateur."""
         self.data.get('global').execute('DELETE FROM assistant_memory WHERE user_id = ?', user.id)
         
+    # Recherche web -----------------------------------------------------------
+    
+    def search_web_pages(self, query: str, lang: str = 'fr', num_results: int = 3) -> list[dict]:
+        """Recherche des informations sur le web."""
+        results = search(query, lang=lang, num_results=num_results, advanced=True) 
+        return [{'url': result.url, 'title': result.title, 'description': result.description} for result in results]
+        
     # Fonctions de serveur ----------------------------------------------------
     
     def get_server_emojis(self, guild: discord.Guild) -> list[str]:
@@ -791,7 +824,8 @@ class Assistant(commands.Cog):
         markers = {
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
-            'set_user_info': "<:write:1298816135722172617> Édition de note"
+            'set_user_info': "<:write:1298816135722172617> Édition de note",
+            'search_web_pages': "<:sitealt:1305143458830352445> Recherche web",
         }
         return ' '.join([markers.get(tool, '') for tool in used_tools])
     
@@ -868,8 +902,8 @@ class Assistant(commands.Cog):
         if type(file_or_buffer) == Path:
             os.remove(str(file_or_buffer))
 
-        if len(transcript) > 1950:
-            return await message.reply(f"**Transcription demandée par {transcript_author.mention}** :\n>>> {transcript[:1950]}...", mention_author=False)
+        if len(transcript) > 1900:
+            return await message.reply(f"**Transcription demandée par {transcript_author.mention}** :\n>>> {transcript[:1900]}...", mention_author=False)
         
         await message.reply(f"**Transcription demandée par {transcript_author.mention}** :\n>>> {transcript}", mention_author=False)
     
