@@ -26,11 +26,12 @@ from common.utils import fuzzy, pretty
 logger = logging.getLogger(f'MARIA.{__name__.split(".")[-1]}')
 
 # Prompt système complété du fonctionnement interne de l'assistant
-META_SYSTEM_PROMPT = lambda d: f"""[FONCTIONNEMENT]
+META_SYSTEM_PROMPT = lambda d: f"""
+[META]
 Tu es {d['assistant_name']}. Tu réponds aux utilisateurs d'un salon de discussion.
 Les messages des utilisateurs sont précédés de leurs noms. Ne met pas le tien devant tes réponses.
 Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
-[INFORMATIONS]
+[INFOS]
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
@@ -43,8 +44,8 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 
 # Constantes
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
-MAX_COMPLETION_TOKENS = 500 # Nombre maximal de tokens pour une complétion
-CONTEXT_WINDOW = 10000 # Nombre de tokens à conserver dans le contexte de conversation
+MAX_COMPLETION_TOKENS = 512 # Nombre maximal de tokens pour une complétion
+CONTEXT_WINDOW = 16384 # Nombre de tokens à conserver dans le contexte de conversation
 CONTEXT_MAX_AGE = timedelta(hours=48) # Durée maximale de conservation des messages dans le contexte de conversation
 CONTEXT_CLEANUP_INTERVAL = timedelta(hours=1) # Intervalle de nettoyage du contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
@@ -965,7 +966,7 @@ class Assistant(commands.Cog):
     @app_commands.command(name='systemprompt')
     @app_commands.guild_only()
     async def system_prompt_command(self, interaction: Interaction):
-        """Consulter ou modifier les instructions système de l'assistant."""
+        """Consulter et modifier le comportement de l'assistant."""
         if not isinstance(interaction.guild, discord.Guild):
             return await interaction.response.send_message("**Action impossible** × Cette commande n'est pas disponible en message privé.", ephemeral=True)
         
