@@ -919,7 +919,7 @@ class Assistant(commands.Cog):
             'delete_user_reminder': "<:reminder:1305949302752940123> Suppression de rappel",
             'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
         }
-        return ' '.join([markers.get(tool, '') for tool in used_tools])
+        return ' · '.join([markers.get(tool, '') for tool in used_tools])
     
     # AUDIO -------------------------------------------------------------------
     
