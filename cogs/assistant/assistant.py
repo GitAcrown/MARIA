@@ -36,7 +36,7 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Date/heure : {d['current_time']}
 [OUTILS]
 - Tu peux noter des informations sur les utilisateurs que tu dois consulter dès que nécessaire (ex. âge, ville, etc.).
-- Tu peux créer et gérer des rappels pour les utilisateurs. Si l'utilisateur ne précise pas l'objet du rappel, demande-lui. Pour éditer un rappel tu peux en supprimer et en créer un nouveau.
+- Tu peux créer et gérer des rappels pour les utilisateurs. Si l'utilisateur ne précise pas l'objet du rappel ou la date et l'heure, demande-lui. Pour éditer un rappel tu peux en supprimer et en créer un nouveau.
 - Tu peux rechercher des pages web pour les utilisateurs.
 [INSTRUCTIONS]
 {d['system_prompt']}
@@ -149,7 +149,7 @@ GPT_TOOLS = [
                 'required': ['user', 'reminder', 'date'],
                 'properties': {
                     'user': {'type': 'string', 'description': "Nom de l'utilisateur à rappeler."},
-                    'reminder': {'type': 'string', 'description': "Contenu du rappel. Demander à l'utilisateur s'il ne donne pas l'objet du rappel."},
+                    'reminder': {'type': 'string', 'description': "Contenu du rappel."},
                     'date': {'type': 'string', 'description': "Date et heure du rappel au format ISO 8601 (ex. '2023-12-31T23:59')."}
                 },
                 'additionalProperties': False
