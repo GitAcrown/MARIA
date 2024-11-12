@@ -902,8 +902,9 @@ class Assistant(commands.Cog):
     def get_reminder_data(self) -> dataio.ModelDataManager:
         return dataio.get_instance('reminders').get('global')
     
-    def get_user_reminders(self, user: discord.Member | discord.User) -> list[dict]:
-        return self.get_reminder_data().fetchall('SELECT * FROM reminders WHERE user_id = ? ORDER BY remind_at', user.id)
+    def get_user_reminders(self, user: discord.Member | discord.User) -> dict:
+        r = self.get_reminder_data().fetchall('SELECT * FROM reminders WHERE user_id = ? ORDER BY remind_at', user.id)
+        return {row['id']: {'channel_id': row['channel_id'], 'content': row['content'], 'remind_at': row['remind_at']} for row in r}
     
     def create_user_reminder(self, user: discord.Member | discord.User, channel: discord.TextChannel | discord.Thread, date: datetime, message: str) -> int | None:
         time = date.timestamp()
