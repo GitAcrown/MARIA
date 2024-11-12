@@ -172,20 +172,6 @@ GPT_TOOLS = [
                 'additionalProperties': False
             }
         }
-    },
-    { # Récupération des emojis du serveur
-     'type': 'function',
-        'function': {
-            'name': 'get_server_emojis',
-            'description': "Récupère la liste des emojis Discord du serveur.",
-            'strict': True,
-            'parameters': {
-                'type': 'object',
-                'required': [],
-                'properties': {},
-                'additionalProperties': False
-            }
-        }   
     }
 ]
 
@@ -726,10 +712,6 @@ class ChatSession:
             else:
                 tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
             
-        elif call.function_name == 'get_server_emojis':
-            emojis = self.__cog.get_server_emojis(self.guild)
-            tool_msg = ToolCtxMessage({'emojis': emojis}, tool_call.id)
-            
         elif call.function_name == 'get_user_reminders':
             username = call.function_arguments['user']
             user = self.__cog.fetch_user_from_name(self.guild, username)
@@ -924,12 +906,6 @@ class Assistant(commands.Cog):
         """Recherche des informations sur le web."""
         results = search(query, lang=lang, num_results=num_results, advanced=True) 
         return [{'url': result.url, 'title': result.title, 'description': result.description} for result in results]
-        
-    # Fonctions de serveur ----------------------------------------------------
-    
-    def get_server_emojis(self, guild: discord.Guild) -> list[str]:
-        """Renvoie la liste des emojis du serveur."""
-        return [f"{emoji} ({emoji.name})" for emoji in guild.emojis]
         
     # Marqueurs d'outils -------------------------------------------------------
     
