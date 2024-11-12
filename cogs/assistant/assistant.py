@@ -35,9 +35,10 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 [OUTILS]
-- Notes d'utilisateurs : utilise-les dès que nécessaire pour récupérer, rechercher ou mettre à jour des informations sur les utilisateurs.
-- Recherche web : pour récupérer des liens vers des pages web.
-- Emojis du serveur : pour récupérer la liste des emojis Discord du serveur.
+- Tu peux noter des informations sur les utilisateurs que tu dois consulter dès que nécessaire (ex. âge, ville, etc.).
+- Tu peux rechercher des pages web pour les utilisateurs.
+- Tu peux créer et gérer des rappels pour les utilisateurs. Si l'utilisateur ne précise pas l'objet du rappel, demande-lui. Pour éditer un rappel tu peux en supprimer et en créer un nouveau.
+- Tu peux récupérer des emojis du serveur pour les utiliser dans tes réponses.
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
@@ -117,6 +118,56 @@ GPT_TOOLS = [
                     'query': {'type': 'string', 'description': "Requête de recherche."},
                     'lang': {'type': 'string', 'description': "Langue de recherche (ex. 'fr')."},
                     'num_results': {'type': 'integer', 'description': "Nombre de résultats à renvoyer. (Max. 10)."}
+                },
+                'additionalProperties': False
+            }
+        }
+    },
+    { # Récupération des rappels d'un utilisateur
+     'type': 'function',
+        'function': {
+            'name': 'get_user_reminders',
+            'description': "Récupère les rappels d'un utilisateur.",
+            'strict': True,
+            'parameters': {
+                'type': 'object',
+                'required': ['user'],
+                'properties': {
+                    'user': {'type': 'string', 'description': "Nom de l'utilisateur à rechercher."}
+                },
+                'additionalProperties': False
+            }
+        }
+    },
+    { # Création d'un rappel pour un utilisateur
+        'type': 'function',
+        'function': {
+            'name': 'create_user_reminder',
+            'description': "Crée un rappel pour un utilisateur.",
+            'strict': True,
+            'parameters': {
+                'type': 'object',
+                'required': ['user', 'reminder', 'date'],
+                'properties': {
+                    'user': {'type': 'string', 'description': "Nom de l'utilisateur à rappeler."},
+                    'reminder': {'type': 'string', 'description': "Contenu du rappel. Demander à l'utilisateur s'il ne donne pas l'objet du rappel."},
+                    'date': {'type': 'string', 'description': "Date et heure du rappel au format ISO 8601 (ex. '2023-12-31T23:59')."}
+                },
+                'additionalProperties': False
+            }
+        }
+    },
+    { # Suppression d'un rappel pour un utilisateur
+        'type': 'function',
+        'function': {
+            'name': 'delete_user_reminder',
+            'description': "Supprime un rappel pour un utilisateur.",
+            'strict': True,
+            'parameters': {
+                'type': 'object',
+                'required': ['reminder_id'],
+                'properties': {
+                    'reminder_id': {'type': 'string', 'description': "Identifiant du rappel à supprimer (obtenable via 'get_user_reminders')."}
                 },
                 'additionalProperties': False
             }
@@ -453,7 +504,7 @@ class ChatInteraction:
     
     @property
     def retrieved_channel(self) -> discord.TextChannel | discord.Thread | None:
-        """Tente de récupérer le salon de la dernière question de l'interaction."""
+        """Tente de récupérer le salon écrit de l'interaction."""
         for message in self.messages:
             if isinstance(message, UserCtxMessage):
                 return message._channel
@@ -606,9 +657,11 @@ class ChatSession:
             logger.exception('An error occured while parsing the completion.')
             raise e
         
+        carryover['channel'] = chat_interaction.retrieved_channel
+        
         if ENABLE_TOOLS and completion.choices[0].message:
             if completion.choices[0].message.tool_calls and assistant_msg.finish_reason == 'tool_calls':
-                tool_call, tool_msg = await self.call_tool(completion.choices[0].message.tool_calls[0])
+                tool_call, tool_msg = await self.call_tool(completion.choices[0].message.tool_calls[0], **carryover)
                 if not tool_call.function_name in tools:
                     tools.append(tool_call.function_name)
                 if tool_msg:
@@ -631,7 +684,7 @@ class ChatSession:
         
     # Outils de l'assistant
     
-    async def call_tool(self, tool_call: ChatCompletionMessageToolCall) -> tuple[AssistantToolCall, ToolCtxMessage | None]:
+    async def call_tool(self, tool_call: ChatCompletionMessageToolCall, **carryover) -> tuple[AssistantToolCall, ToolCtxMessage | None]:
         """Appelle un outil de l'assistant."""
         call = AssistantToolCall.from_gpt_tool_call(tool_call)
         tool_msg = None
@@ -676,6 +729,43 @@ class ChatSession:
         elif call.function_name == 'get_server_emojis':
             emojis = self.__cog.get_server_emojis(self.guild)
             tool_msg = ToolCtxMessage({'emojis': emojis}, tool_call.id)
+            
+        elif call.function_name == 'get_user_reminders':
+            username = call.function_arguments['user']
+            user = self.__cog.fetch_user_from_name(self.guild, username)
+            if user:
+                reminders = self.__cog.get_user_reminders(user)
+                tool_msg = ToolCtxMessage({'user': user.name, 'reminders': reminders}, tool_call.id)
+            else:
+                tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
+                
+        elif call.function_name == 'create_user_reminder':
+            username = call.function_arguments['user']
+            reminder = call.function_arguments['reminder']
+            date = call.function_arguments['date']
+            channel = carryover.get('channel')
+            user = self.__cog.fetch_user_from_name(self.guild, username)
+            dtime = None
+            if user:
+                if channel:
+                    try:
+                        dtime = datetime.fromisoformat(date)
+                        self.__cog.create_user_reminder(user, channel, dtime, reminder)
+                        tool_msg = ToolCtxMessage({'user': user.name, 'reminder': reminder, 'date': dtime.isoformat()}, tool_call.id)
+                    except ValueError:
+                        tool_msg = ToolCtxMessage({'error': f"Date '{date}' invalide. Utilisez le format ISO 8601 (ex. '2023-12-31T23:59')."}, tool_call.id)
+                else:
+                    tool_msg = ToolCtxMessage({'error': "Salon de rappel introuvable."}, tool_call.id)
+            else:
+                tool_msg = ToolCtxMessage({'error': f"Utilisateur '{username}' introuvable."}, tool_call.id)
+        
+        elif call.function_name == 'delete_user_reminder':
+            reminder_id = call.function_arguments['reminder_id']
+            success = self.__cog.delete_user_reminder(reminder_id)
+            if success:
+                tool_msg = ToolCtxMessage({'deleted_reminder_id': reminder_id}, tool_call.id)
+            else:
+                tool_msg = ToolCtxMessage({'error': f"Rappel '{reminder_id}' introuvable."}, tool_call.id)
         
         elif call.function_name == 'search_web_pages':
             query = call.function_arguments['query']
@@ -807,6 +897,26 @@ class Assistant(commands.Cog):
         """Supprime toutes les informations d'un utilisateur."""
         self.data.get('global').execute('DELETE FROM assistant_memory WHERE user_id = ?', user.id)
         
+    # Rappels utilisateur -----------------------------------------------------
+    
+    def get_reminder_data(self) -> dataio.ModelDataManager:
+        return dataio.get_instance('reminders').get('global')
+    
+    def get_user_reminders(self, user: discord.Member | discord.User) -> list[dict]:
+        return self.get_reminder_data().fetchall('SELECT * FROM reminders WHERE user_id = ? ORDER BY remind_at', user.id)
+    
+    def create_user_reminder(self, user: discord.Member | discord.User, channel: discord.TextChannel | discord.Thread, date: datetime, message: str) -> int | None:
+        time = date.timestamp()
+        r = self.get_reminder_data().fetchone('INSERT OR REPLACE INTO reminders (user_id, channel_id, content, remind_at) VALUES (?, ?, ?, ?)', user.id, channel.id, message, time)
+        self.get_reminder_data().commit()
+        return r['id'] if r else None
+        
+    def delete_user_reminder(self, reminder_id: int) -> bool:
+        if not self.get_reminder_data().fetchone('SELECT * FROM reminders WHERE id = ?', reminder_id):
+            return False
+        self.get_reminder_data().execute('DELETE FROM reminders WHERE id = ?', reminder_id)
+        return True
+        
     # Recherche web -----------------------------------------------------------
     
     def search_web_pages(self, query: str, lang: str = 'fr', num_results: int = 3) -> list[dict]:
@@ -828,7 +938,10 @@ class Assistant(commands.Cog):
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
             'set_user_info': "<:write:1298816135722172617> Édition de note",
-            'search_web_pages': "<:sitealt:1305143458830352445> Recherche web",
+            'create_user_reminder': "<:reminder:1305949302752940123> Création de rappel",
+            'get_user_reminders': "<:reminder:1305949302752940123> Consultation des rappels",
+            'delete_user_reminder': "<:reminder:1305949302752940123> Suppression de rappel",
+            'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
         }
         return ' '.join([markers.get(tool, '') for tool in used_tools])
     
