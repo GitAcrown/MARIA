@@ -36,9 +36,9 @@ Tu dois suivre scrupuleusement les [INSTRUCTIONS] données ci-après.
 - Date/heure : {d['current_time']}
 [OUTILS]
 - Tu peux noter des informations sur les utilisateurs que tu dois consulter dès que nécessaire (ex. âge, ville, etc.).
-- Tu peux rechercher des pages web pour les utilisateurs.
 - Tu peux créer et gérer des rappels pour les utilisateurs. Si l'utilisateur ne précise pas l'objet du rappel, demande-lui. Pour éditer un rappel tu peux en supprimer et en créer un nouveau.
-- Tu peux récupérer des emojis du serveur pour les utiliser dans tes réponses.
+- Tu peux rechercher des pages web pour les utilisateurs.
+- Tu peux consulter les emojis du serveur si nécessaire.
 [INSTRUCTIONS]
 {d['system_prompt']}
 """
