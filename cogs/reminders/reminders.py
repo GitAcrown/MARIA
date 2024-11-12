@@ -1,10 +1,10 @@
 import logging
 from datetime import datetime
+from typing import Union
 
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands, tasks
-from git import Union
 
 from common import dataio
 from common.utils import fuzzy, pretty
