@@ -168,7 +168,7 @@ class Reminders(commands.Cog):
     
     @reminder_group.command(name='list')
     async def cmd_list_reminders(self, interaction: Interaction):
-        """Liste les rappels enregistrés pour l'utilisateur"""
+        """Liste vos rappels enregistrés"""
         user = interaction.user
         reminders = self.get_reminders(user)
         if not reminders:
@@ -183,7 +183,7 @@ class Reminders(commands.Cog):
     @reminder_group.command(name='add')
     @app_commands.rename(content='contenu', remind_at='date')
     async def cmd_add_reminder(self, interaction: Interaction, content: str, remind_at: str):
-        """Ajoute un rappel pour l'utilisateur
+        """Ajouter un rappel
 
         :param content: Contenu du rappel
         :param remind_at: Date et heure du rappel
@@ -208,7 +208,7 @@ class Reminders(commands.Cog):
     @reminder_group.command(name='remove')
     @app_commands.rename(reminder_id='identifiant')
     async def cmd_remove_reminder(self, interaction: Interaction, reminder_id: int):
-        """Supprime un rappel de la liste de l'utilisateur
+        """Supprimer un rappel
 
         :param reminder_id: Identifiant du rappel
         """
