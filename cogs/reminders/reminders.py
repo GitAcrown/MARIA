@@ -159,7 +159,7 @@ class Reminders(commands.Cog):
     # Envoi de rappels ---------------------------------------------------------
     
     async def send_reminder(self, reminder: UserReminder):
-        text = f"*{reminder.content}*\n-# <:reminder:1305949302752940123> {reminder.user.mention} · <t:{int(reminder.remind_at.timestamp())}:R>"
+        text = f"*{reminder.content}*\n-# <:reminder_ring:1306292829781233756> {reminder.user.mention} · <t:{int(reminder.remind_at.timestamp())}:R>"
         await reminder.channel.send(text)
         
     # Commandes ----------------------------------------------------------------

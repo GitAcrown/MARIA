@@ -885,7 +885,7 @@ class Assistant(commands.Cog):
     
     def get_user_reminders(self, user: discord.Member | discord.User) -> dict:
         r = self.get_reminder_data().fetchall('SELECT * FROM reminders WHERE user_id = ? ORDER BY remind_at', user.id)
-        return dict({row['id']: {'content': row['content'], 'remind_at': row['remind_at']} for row in r})
+        return dict({row['id']: {'content': row['content'], 'remind_at': datetime.fromtimestamp(row['remind_at']).isoformat()} for row in r})
     
     def create_user_reminder(self, user: discord.Member | discord.User, channel: discord.TextChannel | discord.Thread, date: datetime, message: str) -> int | None:
         time = date.timestamp()
@@ -914,9 +914,9 @@ class Assistant(commands.Cog):
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
             'set_user_info': "<:write:1298816135722172617> Édition de note",
-            'create_user_reminder': "<:reminder:1305949302752940123> Création de rappel",
-            'get_user_reminders': "<:reminder:1305949302752940123> Consultation des rappels",
-            'delete_user_reminder': "<:reminder:1305949302752940123> Suppression de rappel",
+            'create_user_reminder': "<:reminder_create:1306293495157489664> Création de rappel",
+            'get_user_reminders': "<:reminder:1305949302752940123> Consultation de rappels",
+            'delete_user_reminder': "<:reminder_delete:1306293289598582849> Suppression de rappel",
             'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
         }
         return ' · '.join([markers.get(tool, '') for tool in used_tools])
