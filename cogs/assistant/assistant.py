@@ -324,12 +324,14 @@ class AssistantCtxMessage(ContextMessage):
                  token_count: int = 0,
                  files: list[discord.File] = [],
                  tools_used: list[str] = [],
-                 finish_reason: str | None = None) -> None:
+                 finish_reason: str | None = None,
+                 extras: list = []) -> None:
         super().__init__('assistant', content, timestamp=timestamp, token_count=token_count)
         self._raw_content : str = content
         self.files = files
         self.tools_used = tools_used
         self.finish_reason : str | None = finish_reason
+        self._extras = extras
         
     @classmethod
     def from_gpt_payload(cls, payload: ChatCompletion) -> 'AssistantCtxMessage':
@@ -631,6 +633,7 @@ class ChatSession:
                 logger.exception('An error occured while completing a message.', exc_info=e)
                 # On efface les interactions contenant des images et on relance la complétion
                 self.clear_interactions(lambda i: i.contains_image)
+                carryover.get('extras', []).append('invalid_image_url')
                 return await self.complete(chat_interaction, **carryover)
             logger.exception('An error occured while completing a message.', exc_info=e)
             raise e
@@ -663,6 +666,7 @@ class ChatSession:
 
         assistant_msg.files = files
         assistant_msg.tools_used = tools
+        assistant_msg._extras = carryover.get('extras', [])
         chat_interaction.add_messages(assistant_msg)
         return chat_interaction
         
@@ -907,8 +911,8 @@ class Assistant(commands.Cog):
         
     # Marqueurs d'outils -------------------------------------------------------
     
-    def get_tool_markers(self, used_tools: list[str]) -> str:
-        """Renvoie les marqueurs d'outils utilisés."""
+    def get_meta_markers(self, ids: list[str]) -> str:
+        """Renvoie les marqueurs d'outils ou d'extras utilisés."""
         markers = {
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
@@ -917,8 +921,9 @@ class Assistant(commands.Cog):
             'get_user_reminders': "<:reminder:1305949302752940123> Consultation de rappels",
             'delete_user_reminder': "<:reminder_delete:1306293289598582849> Suppression de rappel",
             'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
+            'invalid_image_url': "<:error:1306297951966199829> Image fournie invalide"
         }
-        return ' · '.join([markers.get(tool, '') for tool in used_tools])
+        return ' · '.join([markers.get(tool, '') for tool in ids])
     
     # AUDIO -------------------------------------------------------------------
     
@@ -1042,7 +1047,7 @@ class Assistant(commands.Cog):
                 
                 files = completion.files
                 content = completion._raw_content[:1900]
-                markers = self.get_tool_markers(completion.tools_used)
+                markers = self.get_meta_markers(completion.tools_used + completion._extras)
                 if markers:
                     content += f"\n-# {markers}"
                 
