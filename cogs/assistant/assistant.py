@@ -929,7 +929,7 @@ class Assistant(commands.Cog):
             'delete_user_reminder': "<:reminder_delete:1306293289598582849> Suppression de rappel",
             'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
             # Erreurs
-            'invalid_image_url': "<:error:1306297951966199829> Image invalide ignorée"
+            'invalid_image_url': "<:comp_error:1306304617205993563> Image invalide ignorée"
         }
         return ' · '.join([markers.get(tool, '') for tool in ids])
     
@@ -1055,7 +1055,6 @@ class Assistant(commands.Cog):
                 
                 files = completion.files
                 content = completion._raw_content[:1900]
-                print(">>> COMP : ", completion)
                 markers = self.get_meta_markers(completion.tools_used + completion.extras)
                 if markers:
                     content += f"\n-# {markers}"
