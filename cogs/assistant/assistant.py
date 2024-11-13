@@ -431,17 +431,23 @@ class UserCtxMessage(ContextMessage):
                     else:
                         content.append(MessageElement('text', f'[Début de citation] [Embed] {embed.description} [Fin de citation]'))
             
+            # Images fournies 
             for attachment in msg.attachments:
                 if attachment.content_type and attachment.content_type.startswith('image'):
                     image_urls.append(attachment.url)
+            # URL d'images
             for match in re.finditer(r'(https?://[^\s]+)', msg.content):
                 url = match.group(1)
-                url = re.sub(r'\?.*$', '', url)
-                if url.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                cleanurl = re.sub(r'\?.*$', '', url)
+                if cleanurl.endswith(('.png', '.jpg', '.jpeg', '.gif')):
                     image_urls.append(url)
+            # Images dans les embeds
             for embed in msg.embeds:
                 if embed.image and embed.image.url:
                     image_urls.append(embed.image.url)
+            # Stickers
+            for sticker in msg.stickers:
+                image_urls.append(sticker.url)
             
         if image_urls:
             content.extend([MessageElement('image_url', url) for url in image_urls])
@@ -913,6 +919,7 @@ class Assistant(commands.Cog):
     def get_meta_markers(self, ids: list[str]) -> str:
         """Renvoie les marqueurs d'outils ou d'extras utilisés."""
         markers = {
+            # Outils
             'get_user_info': "<:search:1298816145356492842> Consultation de note",
             'find_users_by_key': "<:search_key:1298973550530793472> Recherche de notes",
             'set_user_info': "<:write:1298816135722172617> Édition de note",
@@ -920,7 +927,8 @@ class Assistant(commands.Cog):
             'get_user_reminders': "<:reminder:1305949302752940123> Consultation de rappels",
             'delete_user_reminder': "<:reminder_delete:1306293289598582849> Suppression de rappel",
             'search_web_pages': "<:sitealt:1305143458830352445> Recherche internet",
-            'invalid_image_url': "<:error:1306297951966199829> Image fournie invalide"
+            # Erreurs
+            'invalid_image_url': "<:error:1306297951966199829> Image invalide ignorée"
         }
         return ' · '.join([markers.get(tool, '') for tool in ids])
     
