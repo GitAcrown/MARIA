@@ -654,7 +654,7 @@ class ChatSession:
                 if tool_msg:
                     files.extend(tool_msg.attachments)
                     chat_interaction.add_messages(tool_call, tool_msg)
-                    return await self.complete(chat_interaction, files=files, tools=tools) # On relance la complétion avec la réponse de l'outil
+                    return await self.complete(chat_interaction, files=files, tools=tools, extras=carryover.get('extras', []))
                 else:
                     chat_interaction.add_messages(tool_call)
         
@@ -662,7 +662,7 @@ class ChatSession:
             if assistant_msg.finish_reason == 'content_filter':
                 assistant_msg._raw_content = "**Contenu filtré par OpenAI** × Veuillez reformuler votre question."
             elif not carryover.get('retry', False):
-                return await self.complete(chat_interaction, files=files, tools=tools, retry=True)
+                return await self.complete(chat_interaction, files=files, tools=tools, retry=True, extras = carryover.get('extras', []))
 
         assistant_msg.files = files
         assistant_msg.tools_used = tools
