@@ -325,7 +325,7 @@ class AssistantCtxMessage(ContextMessage):
                  files: list[discord.File] = [],
                  tools_used: list[str] = [],
                  finish_reason: str | None = None,
-                 extras: list = []) -> None:
+                 extras: list[str] = []) -> None:
         super().__init__('assistant', content, timestamp=timestamp, token_count=token_count)
         self._raw_content : str = content
         self.files = files
@@ -630,12 +630,11 @@ class ChatSession:
             )
         except Exception as e:
             if 'invalid_image_url' in str(e):
-                logger.exception('An error occured while completing a message.', exc_info=e)
+                logger.exception('An error occured while completing a message.', exc_info=True)
                 # On efface les interactions contenant des images et on relance la complétion
                 self.clear_interactions(lambda i: i.contains_image)
                 carryover.get('extras', []).append('invalid_image_url')
                 return await self.complete(chat_interaction, **carryover)
-            logger.exception('An error occured while completing a message.', exc_info=e)
             raise e
         
         try:
