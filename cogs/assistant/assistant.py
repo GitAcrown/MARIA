@@ -331,7 +331,7 @@ class AssistantCtxMessage(ContextMessage):
         self.files = files
         self.tools_used = tools_used
         self.finish_reason : str | None = finish_reason
-        self._extras = extras
+        self.extras = extras
         
     @classmethod
     def from_gpt_payload(cls, payload: ChatCompletion) -> 'AssistantCtxMessage':
@@ -623,6 +623,7 @@ class ChatSession:
         
         files = carryover.get('files', [])
         tools = carryover.get('tools', [])
+        extras = carryover.get('extras', [])
         
         try:
             completion = await self.__cog.openai_client.chat.completions.create(
@@ -639,8 +640,8 @@ class ChatSession:
                 logger.exception('An error occured while completing a message.', exc_info=True)
                 # On efface les interactions contenant des images et on relance la complétion
                 self.clear_interactions(lambda i: i.contains_image)
-                carryover.get('extras', []).append('invalid_image_url')
-                return await self.complete(chat_interaction, **carryover)
+                extras.append('invalid_image_url')
+                return await self.complete(chat_interaction, files=files, tools=tools, extras=extras)
             raise e
         
         try:
@@ -659,7 +660,7 @@ class ChatSession:
                 if tool_msg:
                     files.extend(tool_msg.attachments)
                     chat_interaction.add_messages(tool_call, tool_msg)
-                    return await self.complete(chat_interaction, files=files, tools=tools, extras=carryover.get('extras', []))
+                    return await self.complete(chat_interaction, files=files, tools=tools, extras=extras)
                 else:
                     chat_interaction.add_messages(tool_call)
         
@@ -667,11 +668,11 @@ class ChatSession:
             if assistant_msg.finish_reason == 'content_filter':
                 assistant_msg._raw_content = "**Contenu filtré par OpenAI** × Veuillez reformuler votre question."
             elif not carryover.get('retry', False):
-                return await self.complete(chat_interaction, files=files, tools=tools, retry=True, extras = carryover.get('extras', []))
+                return await self.complete(chat_interaction, files=files, tools=tools, retry=True, extras=extras)
 
         assistant_msg.files = files
         assistant_msg.tools_used = tools
-        assistant_msg._extras = carryover.get('extras', [])
+        assistant_msg.extras = extras
         chat_interaction.add_messages(assistant_msg)
         return chat_interaction
         
@@ -1054,7 +1055,8 @@ class Assistant(commands.Cog):
                 
                 files = completion.files
                 content = completion._raw_content[:1900]
-                markers = self.get_meta_markers(completion.tools_used + completion._extras)
+                print(">>> COMP : ", completion)
+                markers = self.get_meta_markers(completion.tools_used + completion.extras)
                 if markers:
                     content += f"\n-# {markers}"
                 
