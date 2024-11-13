@@ -102,10 +102,6 @@ class Reminders(commands.Cog):
                 extracted = extracted.replace(month=now.month)
             if extracted.day == 1:
                 extracted = extracted.replace(day=now.day)
-            if extracted.hour == 0:
-                extracted = extracted.replace(hour=now.hour)
-            if extracted.minute == 0:
-                extracted = extracted.replace(minute=now.minute)
         else:
             return now
         return extracted
