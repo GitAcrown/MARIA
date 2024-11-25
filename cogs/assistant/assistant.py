@@ -34,17 +34,17 @@ Les crochets [ ] indiquent des informations supplémentaires. Tu peux voir et an
 - Serveur : {d['guild_name']}
 - Date/heure : {d['current_time']}
 #OUTILS
-NOTES : Tu dois noter et consulter les notes sur les utilisateurs dès que nécessaire (ex. âge, ville, etc.).
-RAPPELS : Tu peux créer et supprimer des rappels pour les utilisateurs. Si une information manque (date ou objet du rappel), demande-la à l'utilisateur. Pour éditer un rappel tu dois le supprimer et en créer un nouveau.
-RECHERCHE WEB : Cherche sur internet tout ce que tu ne sais pas ou ce que tu veux vérifier.
+NOTES : N'hésite pas à noter et consulter les notes sur les utilisateurs dès que nécessaire (ex. âge, ville, etc.).
+RAPPELS : Tu peux créer et supprimer des rappels pour les utilisateurs. Si une information manque (date ou objet du rappel), demande-la à l'utilisateur. N'effectue des opérations sur les rappels que de l'utilisateur concerné, pas pour d'autres.
+RECHERCHE WEB : Cherche sur internet à chaque fois que tu ignores la réponse ou que tu as besoin de plus d'informations.
 #INSTRUCTIONS
 {d['system_prompt']}
 """
 
 # Constantes
 DEFAULT_SYSTEM_PROMPT = "Tu es un assistant utile et familier qui répond aux questions des différents utilisateurs de manière concise et simple."
-MAX_COMPLETION_TOKENS = 512 # Nombre maximal de tokens pour une complétion
-CONTEXT_WINDOW = 16384 # Nombre de tokens à conserver dans le contexte de conversation
+MAX_COMPLETION_TOKENS = 600 # Nombre maximal de tokens pour une complétion
+CONTEXT_WINDOW = 20000 # Nombre de tokens à conserver dans le contexte de conversation
 CONTEXT_MAX_AGE = timedelta(hours=48) # Durée maximale de conservation des messages dans le contexte de conversation
 CONTEXT_CLEANUP_INTERVAL = timedelta(hours=1) # Intervalle de nettoyage du contexte de conversation
 VISION_DETAIL = 'low' # Détail de la vision artificielle
